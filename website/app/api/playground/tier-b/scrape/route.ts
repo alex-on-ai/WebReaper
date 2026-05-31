@@ -45,10 +45,11 @@ export async function GET(req: Request): Promise<Response> {
   const limit = await checkRateLimits(ip);
   if (!limit.ok) return sseError(limit.reason);
 
-  // Capture the lead before metering, so an at-capacity visitor is still on the
-  // list when shown the "sign up" message.
-  const email = await captureEmail(params.get("email"), ip);
-  if (!email.ok) return sseError(email.reason);
+  // Email is now captured AFTER the run (the post-run waitlist nudge), so the
+  // climb starts with no friction. If a client still passes one, capture it
+  // best-effort; an invalid address is ignored rather than blocking the run.
+  const rawEmail = params.get("email");
+  if (rawEmail) await captureEmail(rawEmail, ip);
 
   const budget = await checkTierBBudget();
   if (!budget.ok) return sseError(budget.reason);

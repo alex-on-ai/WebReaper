@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useReducer, useState } from "react";
+import { type ReactNode, useEffect, useReducer, useRef, useState } from "react";
 import {
   AppWindow,
   ArrowUp,
@@ -127,6 +127,12 @@ const PLAYGROUND_ENDPOINT = "/api/playground/scrape";
  * forwarded to the gate as `cf` when Turnstile is configured. `endpoint` selects
  * the gate route (defaults to the Tier A scrape gate; the Tier B climb passes its
  * own route), and `email` is forwarded as the Tier B capture-gate param.
+ *
+ * With neither `script` nor `liveUrl` the terminal is idle (the editable "ready
+ * to type" state): pass `prompt` to replace the `webreaper scrape <url>` command
+ * line with your own node (an input). `onConclude` fires once when a run reaches
+ * a terminal outcome (used to reveal the CTA after the canned run, and the
+ * waitlist nudge after a live run).
  */
 export function ClimbDemo({
   script,
@@ -134,6 +140,8 @@ export function ClimbDemo({
   turnstileToken,
   email,
   endpoint = PLAYGROUND_ENDPOINT,
+  prompt,
+  onConclude,
   className,
 }: {
   script?: ClimbScript;
@@ -141,6 +149,8 @@ export function ClimbDemo({
   turnstileToken?: string;
   email?: string;
   endpoint?: string;
+  prompt?: ReactNode;
+  onConclude?: () => void;
   className?: string;
 }) {
   const [state, dispatch] = useReducer(rootReduce, undefined, initialState);
@@ -189,7 +199,27 @@ export function ClimbDemo({
     return playScript(script.events, dispatch);
   }, [script, liveUrl, turnstileToken, email, endpoint, runId]);
 
+  // Fire onConclude exactly once per run, when the outcome leaves "running". A
+  // ref holds the latest callback so its identity does not re-trigger the effect;
+  // the ref is written in an effect (never during render) per react-hooks rules.
+  const onConcludeRef = useRef(onConclude);
+  useEffect(() => {
+    onConcludeRef.current = onConclude;
+  });
+  const concludedRef = useRef(false);
+  useEffect(() => {
+    if (state.outcome === "running") {
+      concludedRef.current = false;
+      return;
+    }
+    if (!concludedRef.current) {
+      concludedRef.current = true;
+      onConcludeRef.current?.();
+    }
+  }, [state.outcome]);
+
   const replay = () => setRunId((n) => n + 1);
+  const hasRun = Boolean(script || liveUrl);
 
   return (
     <div
@@ -205,23 +235,33 @@ export function ClimbDemo({
           <span className="h-3 w-3 rounded-full bg-[#28c840]" />
         </span>
         <span className="mx-auto font-mono text-xs text-zinc-500">webreaper</span>
-        <button
-          type="button"
-          onClick={replay}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1 font-mono text-[11px] text-zinc-500 transition hover:text-zinc-200"
-          aria-label="Replay the climb"
-        >
-          <RotateCw className="h-3 w-3" />
-          replay
-        </button>
+        {hasRun ? (
+          <button
+            type="button"
+            onClick={replay}
+            className="flex items-center gap-1.5 rounded-md px-2 py-1 font-mono text-[11px] text-zinc-500 transition hover:text-zinc-200"
+            aria-label="Replay the climb"
+          >
+            <RotateCw className="h-3 w-3" />
+            replay
+          </button>
+        ) : (
+          // Balance the header opposite the traffic-light dots while the terminal
+          // is in its editable "ready to type" state.
+          <span className="w-[52px]" aria-hidden />
+        )}
       </div>
 
       <div className="p-4 font-mono text-[13px] leading-relaxed sm:p-5">
         <div className="flex items-start gap-2">
           <span className="select-none text-accent">❯</span>
-          <span className="break-all text-zinc-200">
-            webreaper scrape {url}
-          </span>
+          {prompt ? (
+            <div className="min-w-0 flex-1">{prompt}</div>
+          ) : (
+            <span className="break-all text-zinc-200">
+              webreaper scrape {url}
+            </span>
+          )}
         </div>
 
         <ol className="mt-4 space-y-0" aria-live="polite">
@@ -236,7 +276,7 @@ export function ClimbDemo({
                 state.tiers[TIER_ORDER[i + 1]].status !== "idle"
               }
               climbingHere={state.climbingTo === tier}
-              concluded={state.outcome !== "running"}
+              won={state.outcome === "won"}
             />
           ))}
         </ol>
@@ -258,14 +298,14 @@ function TierRow({
   isLast,
   nextActive,
   climbingHere,
-  concluded,
+  won,
 }: {
   tier: TierName;
   state: TierState;
   isLast: boolean;
   nextActive: boolean;
   climbingHere: boolean;
-  concluded: boolean;
+  won: boolean;
 }) {
   const Icon = TIER_ICON[tier];
   const reached = state.status !== "idle";
@@ -302,7 +342,7 @@ function TierRow({
           <span className={cn("transition-colors", reached ? "text-zinc-200" : "text-zinc-600")}>
             {TIER_LABEL[tier]}
           </span>
-          <StatusPill status={state.status} pill={state.pill} concluded={concluded} />
+          <StatusPill status={state.status} pill={state.pill} won={won} />
         </div>
         {state.reason && (
           <p className="mt-0.5 text-[12px] text-zinc-500">{state.reason}</p>
@@ -318,13 +358,14 @@ function TierRow({
   );
 }
 
-function StatusPill({ status, pill, concluded }: { status: TierStatus; pill?: string; concluded?: boolean }) {
+function StatusPill({ status, pill, won }: { status: TierStatus; pill?: string; won?: boolean }) {
   if (status === "idle") {
-    // Once a lower rung wins (or the whole climb concludes), an unreached rung
-    // was never needed, rather than still pending.
+    // An idle rung reads "not needed" only when a LOWER rung already got through
+    // (the climb won without reaching here). On a failed/blocked/in-flight run an
+    // unreached rung is still just "queued" — never claim it was unnecessary.
     return (
       <span className="font-mono text-[11px] text-zinc-600">
-        {concluded ? "not needed" : "queued"}
+        {won ? "not needed" : "queued"}
       </span>
     );
   }

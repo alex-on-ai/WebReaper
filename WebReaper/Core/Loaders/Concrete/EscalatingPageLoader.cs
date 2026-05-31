@@ -38,13 +38,15 @@ internal sealed class EscalatingPageLoader : IPageLoader
     private readonly HostTierFloor _hostTierFloor;
     private readonly IPageCache _cache;
     private readonly ILogger _logger;
+    private readonly IClimbObserver _observer;
 
     public EscalatingPageLoader(
         IReadOnlyList<PageLoadTier> tiers,
         IBlockDetector blockDetector,
         HostTierFloor hostTierFloor,
         ILogger logger,
-        IPageCache? cache = null)
+        IPageCache? cache = null,
+        IClimbObserver? observer = null)
     {
         ArgumentNullException.ThrowIfNull(tiers);
         if (tiers.Count == 0)
@@ -59,6 +61,8 @@ internal sealed class EscalatingPageLoader : IPageLoader
         _logger = logger;
         // ADR-0041: NullPageCache preserves the no-cache behaviour exactly.
         _cache = cache ?? new NullPageCache();
+        // ADR-0085: NullClimbObserver is the zero-overhead default.
+        _observer = observer ?? NullClimbObserver.Instance;
     }
 
     public async Task<PageLoadResult> LoadAsync(PageRequest request, CancellationToken cancellationToken = default)
@@ -83,6 +87,8 @@ internal sealed class EscalatingPageLoader : IPageLoader
             _logger.LogInformation(
                 "Loading {PageType} page {Url} at tier {Tier}",
                 _tiers[tier].PageType, request.Url, tier);
+            _observer.OnStep(new ClimbStep(
+                ClimbPhase.Attempt, request.Url, tier, _tiers[tier].PageType, null, null));
 
             // ADR-0083: a climb bypasses the cache for the higher rung (no read
             // here), so a stale cached lower-tier result can never silently
@@ -97,6 +103,8 @@ internal sealed class EscalatingPageLoader : IPageLoader
                 // Only clean results are cached (so the read above is always
                 // safe to serve). A cache-write failure must not fail the load.
                 await TryWriteCacheAsync(request, result, cancellationToken);
+                _observer.OnStep(new ClimbStep(
+                    ClimbPhase.Succeeded, request.Url, tier, _tiers[tier].PageType, result.HttpStatus, null));
                 return result;
             }
 
@@ -121,12 +129,18 @@ internal sealed class EscalatingPageLoader : IPageLoader
                 _logger.LogInformation(
                     "Page {Url} still blocked at the top tier: {Reason}",
                     request.Url, verdict.Reason);
+                _observer.OnStep(new ClimbStep(
+                    ClimbPhase.Exhausted, request.Url, tier, _tiers[tier].PageType, result.HttpStatus, verdict.Reason));
                 return result;
             }
 
             _logger.LogInformation(
                 "Page {Url} blocked at tier {Tier} ({Reason}); climbing to tier {Next}",
                 request.Url, tier, verdict.Reason, tier + 1);
+            _observer.OnStep(new ClimbStep(
+                ClimbPhase.Blocked, request.Url, tier, _tiers[tier].PageType, result.HttpStatus, verdict.Reason));
+            _observer.OnStep(new ClimbStep(
+                ClimbPhase.Climbing, request.Url, tier, _tiers[tier].PageType, null, null));
         }
 
         // Unreachable: the loop returns on the first clean load or at the

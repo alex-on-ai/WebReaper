@@ -97,6 +97,10 @@ internal class SpiderBuilder
     private IBlockDetector BlockDetector { get; set; } =
         new Core.Blocking.Concrete.BlockDetector();
 
+    // ADR-0085: the climb-progress observer the EscalatingPageLoader notifies per
+    // rung; default no-op. Replaced via ScraperEngineBuilder.WithClimbObserver.
+    private IClimbObserver ClimbObserver { get; set; } = NullClimbObserver.Instance;
+
     public SpiderBuilder WithContentExtractor(IContentExtractor extractor)
     {
         ContentExtractor = extractor;
@@ -288,6 +292,15 @@ internal class SpiderBuilder
         return this;
     }
 
+    /// <summary>Register a custom <see cref="IClimbObserver"/> (ADR-0085); the
+    /// default is the no-op <see cref="NullClimbObserver"/>.</summary>
+    public SpiderBuilder WithClimbObserver(IClimbObserver climbObserver)
+    {
+        ArgumentNullException.ThrowIfNull(climbObserver);
+        ClimbObserver = climbObserver;
+        return this;
+    }
+
     /// <summary>Register a custom <see cref="IPageCache"/> (ADR-0041);
     /// the default is <see cref="NullPageCache"/> (no cache).</summary>
     public SpiderBuilder WithPageCache(IPageCache cache)
@@ -358,7 +371,8 @@ internal class SpiderBuilder
                 BlockDetector,
                 new HostTierFloor(),
                 Logger,
-                PageCache);
+                PageCache,
+                ClimbObserver);
         }
 
         CookieStorage.AddAsync(Cookies);

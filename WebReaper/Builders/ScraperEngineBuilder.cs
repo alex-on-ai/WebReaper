@@ -886,6 +886,21 @@ public class ScraperEngineBuilder
     }
 
     /// <summary>
+    /// Register a custom <see cref="IClimbObserver"/> (ADR-0085) notified at each
+    /// rung of the escalating loader's climb (attempt / blocked / climbing /
+    /// succeeded / exhausted), so a consumer can stream the live climb without
+    /// scraping logs. The default is the no-op <c>NullClimbObserver</c>.
+    /// </summary>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="observer"/> is null.</exception>
+    public ScraperEngineBuilder WithClimbObserver(IClimbObserver observer)
+    {
+        ArgumentNullException.ThrowIfNull(observer);
+        SpiderBuilder.WithClimbObserver(observer);
+        return this;
+    }
+
+    /// <summary>
     /// Register a custom <see cref="IPageCache"/> at the page-loader's
     /// cache-aside position (ADR-0041). The default is the no-op
     /// <c>NullPageCache</c>; the firecrawl-shaped TTL adapter is

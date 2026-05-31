@@ -224,6 +224,81 @@ public class EscalatingPageLoaderTests
         Assert.Equal("http", result.Html); // the successful load is still returned
     }
 
+    // --- ADR-0085: the climb-progress observer seam ---
+
+    private sealed class RecordingClimbObserver : IClimbObserver
+    {
+        public List<ClimbStep> Steps { get; } = [];
+        public void OnStep(ClimbStep step) => Steps.Add(step);
+    }
+
+    [Fact]
+    public async Task Observer_sees_attempt_then_succeeded_on_a_clean_load()
+    {
+        var observer = new RecordingClimbObserver();
+        var loader = new EscalatingPageLoader(
+            [Http(new CountingTransport("http", 200)), Browser(new CountingTransport("browser"))],
+            NeverBlocked, new HostTierFloor(), NullLogger.Instance, null, observer);
+
+        await loader.LoadAsync(new PageRequest("https://x.test/", PageType.Static));
+
+        Assert.Collection(observer.Steps,
+            s => { Assert.Equal(ClimbPhase.Attempt, s.Phase); Assert.Equal(0, s.TierIndex); },
+            s =>
+            {
+                Assert.Equal(ClimbPhase.Succeeded, s.Phase);
+                Assert.Equal(0, s.TierIndex);
+                Assert.Equal(200, s.HttpStatus);
+            });
+    }
+
+    [Fact]
+    public async Task Observer_sees_attempt_blocked_climbing_then_succeeded_on_a_climb()
+    {
+        var observer = new RecordingClimbObserver();
+        var loader = new EscalatingPageLoader(
+            [Http(new CountingTransport("http", 403)), Browser(new CountingTransport("browser", 200))],
+            BlockHigh("http"), new HostTierFloor(), NullLogger.Instance, null, observer);
+
+        await loader.LoadAsync(new PageRequest("https://x.test/", PageType.Static));
+
+        Assert.Collection(observer.Steps,
+            s => { Assert.Equal(ClimbPhase.Attempt, s.Phase); Assert.Equal(0, s.TierIndex); },
+            s =>
+            {
+                Assert.Equal(ClimbPhase.Blocked, s.Phase);
+                Assert.Equal(0, s.TierIndex);
+                Assert.Equal(403, s.HttpStatus);
+                Assert.NotNull(s.Reason);
+            },
+            s => { Assert.Equal(ClimbPhase.Climbing, s.Phase); Assert.Equal(0, s.TierIndex); },
+            s => { Assert.Equal(ClimbPhase.Attempt, s.Phase); Assert.Equal(1, s.TierIndex); },
+            s =>
+            {
+                Assert.Equal(ClimbPhase.Succeeded, s.Phase);
+                Assert.Equal(1, s.TierIndex);
+                Assert.Equal(200, s.HttpStatus);
+            });
+    }
+
+    [Fact]
+    public async Task Observer_sees_exhausted_when_blocked_at_the_top_tier()
+    {
+        var observer = new RecordingClimbObserver();
+        var loader = new EscalatingPageLoader(
+            [Http(new CountingTransport("http", 403)), Browser(new CountingTransport("browser", 403))],
+            BlockHigh("http", "browser"), new HostTierFloor(), NullLogger.Instance, null, observer);
+
+        await loader.LoadAsync(new PageRequest("https://x.test/", PageType.Static));
+
+        var last = observer.Steps[^1];
+        Assert.Equal(ClimbPhase.Exhausted, last.Phase);
+        Assert.Equal(1, last.TierIndex);
+        Assert.Equal(403, last.HttpStatus);
+        Assert.Contains(observer.Steps, s => s.Phase == ClimbPhase.Climbing);
+        Assert.DoesNotContain(observer.Steps, s => s.Phase == ClimbPhase.Succeeded);
+    }
+
     private sealed class ThrowingWriteCache : IPageCache
     {
         public Task<PageLoadResult?> TryReadAsync(string url, PageType pageType, CancellationToken cancellationToken)

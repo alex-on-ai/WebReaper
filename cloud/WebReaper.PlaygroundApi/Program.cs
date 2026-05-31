@@ -38,8 +38,13 @@ var chromiumPath = Environment.GetEnvironmentVariable("PLAYGROUND_CHROMIUM_PATH"
 // the public edge route) until the CloakHQ OEM license lands.
 var cloakBrowserPath = Environment.GetEnvironmentVariable("PLAYGROUND_CLOAKBROWSER_PATH");
 
+// Per-job wall-clock budget (seconds). The default 45 is fine for HTTP and
+// vanilla climbs; a full stealth climb against a slow Cloudflare challenge needs
+// more (each browser rung can wait up to 30s for the challenge page to load).
+var jobSeconds = int.TryParse(Environment.GetEnvironmentVariable("PLAYGROUND_TIERB_JOB_SECONDS"), out var js) && js > 0 ? js : 45;
+
 builder.Services.AddSingleton<TierAScraper>();
-builder.Services.AddSingleton(new TierBScraper(chromiumPath, cloakBrowserPath));
+builder.Services.AddSingleton(new TierBScraper(chromiumPath, cloakBrowserPath, jobSeconds));
 
 var app = builder.Build();
 app.UseCors();

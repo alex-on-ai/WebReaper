@@ -35,9 +35,11 @@ public sealed class TierBScraper
     // cannot grow it without limit.
     private const int ChannelCapacity = 64;
 
-    // Per-job wall-clock ceiling (Phase 2 doc decision 3: the ~45s kill). Caps a
-    // hostile or pathological page so one job cannot hold a pooled VM open.
-    private static readonly TimeSpan RunTimeout = TimeSpan.FromSeconds(45);
+    // Per-job wall-clock ceiling (decision 3): caps a hostile or pathological page
+    // so one job cannot hold a pooled VM open. Configurable because a full HTTP to
+    // vanilla to stealth climb against a slow bot-check (each browser rung can wait
+    // up to 30s for the challenge page) needs more than the 45s default.
+    private readonly TimeSpan _runTimeout;
 
     private readonly string? _chromiumPath;
     private readonly string? _cloakBrowserPath;
@@ -48,10 +50,13 @@ public sealed class TierBScraper
     /// <param name="cloakBrowserPath">Absolute path to the baked CloakBrowser
     /// binary. When set, a stealth rung is appended above the vanilla browser rung;
     /// <c>null</c> means HTTP + vanilla browser only.</param>
-    public TierBScraper(string? chromiumPath = null, string? cloakBrowserPath = null)
+    /// <param name="jobSeconds">Per-job wall-clock budget in seconds (default 45).
+    /// A full stealth climb against a slow Cloudflare challenge needs more.</param>
+    public TierBScraper(string? chromiumPath = null, string? cloakBrowserPath = null, int jobSeconds = 45)
     {
         _chromiumPath = chromiumPath;
         _cloakBrowserPath = cloakBrowserPath;
+        _runTimeout = TimeSpan.FromSeconds(jobSeconds > 0 ? jobSeconds : 45);
     }
 
     public async IAsyncEnumerable<object> StreamAsync(
@@ -101,7 +106,7 @@ public sealed class TierBScraper
         // CancelAfter. Either tears the engine down through RunAsync, and the
         // browsers through the await using below.
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(RunTimeout);
+        timeout.CancelAfter(_runTimeout);
 
         // We own each browser rung's process. The lazy WithCdpPageLoader overloads
         // would defer teardown to transport disposal, but the engine never disposes

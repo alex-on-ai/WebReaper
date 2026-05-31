@@ -236,6 +236,7 @@ export function ClimbDemo({
                 state.tiers[TIER_ORDER[i + 1]].status !== "idle"
               }
               climbingHere={state.climbingTo === tier}
+              concluded={state.outcome !== "running"}
             />
           ))}
         </ol>
@@ -257,12 +258,14 @@ function TierRow({
   isLast,
   nextActive,
   climbingHere,
+  concluded,
 }: {
   tier: TierName;
   state: TierState;
   isLast: boolean;
   nextActive: boolean;
   climbingHere: boolean;
+  concluded: boolean;
 }) {
   const Icon = TIER_ICON[tier];
   const reached = state.status !== "idle";
@@ -299,7 +302,7 @@ function TierRow({
           <span className={cn("transition-colors", reached ? "text-zinc-200" : "text-zinc-600")}>
             {TIER_LABEL[tier]}
           </span>
-          <StatusPill status={state.status} pill={state.pill} />
+          <StatusPill status={state.status} pill={state.pill} concluded={concluded} />
         </div>
         {state.reason && (
           <p className="mt-0.5 text-[12px] text-zinc-500">{state.reason}</p>
@@ -315,9 +318,15 @@ function TierRow({
   );
 }
 
-function StatusPill({ status, pill }: { status: TierStatus; pill?: string }) {
+function StatusPill({ status, pill, concluded }: { status: TierStatus; pill?: string; concluded?: boolean }) {
   if (status === "idle") {
-    return <span className="font-mono text-[11px] text-zinc-600">queued</span>;
+    // Once a lower rung wins (or the whole climb concludes), an unreached rung
+    // was never needed, rather than still pending.
+    return (
+      <span className="font-mono text-[11px] text-zinc-600">
+        {concluded ? "not needed" : "queued"}
+      </span>
+    );
   }
   const base = "inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-mono text-[11px]";
   if (status === "active") {

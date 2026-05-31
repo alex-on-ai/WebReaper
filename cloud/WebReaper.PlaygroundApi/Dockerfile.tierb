@@ -57,7 +57,8 @@ RUN dotnet publish cloud/WebReaper.PlaygroundApi/WebReaper.PlaygroundApi.csproj 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        chromium fonts-liberation libicu72 ca-certificates curl nftables \
+        chromium fonts-liberation fonts-noto-core fonts-noto-color-emoji fonts-freefont-ttf \
+        libicu72 ca-certificates curl nftables xvfb \
     && rm -rf /var/lib/apt/lists/*
 RUN curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
     && bash /tmp/dotnet-install.sh --channel 10.0 --runtime aspnetcore --install-dir /usr/share/dotnet \
@@ -76,7 +77,8 @@ RUN chmod +x /app/entrypoint.sh
 # PLAYGROUND_CHROMIUM_PATH / _CLOAKBROWSER_PATH name the two baked binaries.
 ENV ASPNETCORE_URLS=http://+:8080 \
     PLAYGROUND_CHROMIUM_PATH=/usr/bin/chromium \
-    PLAYGROUND_CLOAKBROWSER_PATH=/opt/cloakbrowser/chrome
+    PLAYGROUND_CLOAKBROWSER_PATH=/opt/cloakbrowser/chrome \
+    PLAYGROUND_HEADED=1
 EXPOSE 8080
 # The entrypoint applies the egress firewall (per PLAYGROUND_EGRESS_FIREWALL),
 # then execs the .NET host.

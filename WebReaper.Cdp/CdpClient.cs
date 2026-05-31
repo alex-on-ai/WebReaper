@@ -35,6 +35,13 @@ public sealed class CdpClient : ICdpSession, IAsyncDisposable
     // ADR-0057: per-session network-activity trackers, fed by the read loop
     // on Network.* events; awaited by WaitForNetworkIdleAsync.
     private readonly ConcurrentDictionary<string, NetworkActivity> _networkTrackers = new();
+    // Serialises WebSocket sends: with proxy-auth handling, the read loop also
+    // sends (Fetch.continueWithAuth / continueRequest) concurrently with the main
+    // command flow, and ClientWebSocket forbids overlapping sends.
+    private readonly SemaphoreSlim _sendLock = new(1, 1);
+    // Proxy credentials the read loop answers CDP Fetch.authRequired with (set by
+    // the transport when it drives an authenticated proxy); null = answer Default.
+    private (string Username, string Password)? _proxyAuth;
     private readonly CancellationTokenSource _readLoopCts = new();
     private int _nextId;
     private Task? _readLoopTask;
@@ -81,12 +88,47 @@ public sealed class CdpClient : ICdpSession, IAsyncDisposable
         if (sessionId is not null) message["sessionId"] = sessionId;
 
         var bytes = Encoding.UTF8.GetBytes(message.ToJsonString());
-        await _ws.SendAsync(bytes, WebSocketMessageType.Text, endOfMessage: true, ct);
+        await _sendLock.WaitAsync(ct);
+        try { await _ws.SendAsync(bytes, WebSocketMessageType.Text, endOfMessage: true, ct); }
+        finally { _sendLock.Release(); }
 
         // Respect external cancellation by cancelling the pending TCS.
         using var registration = ct.Register(() => tcs.TrySetCanceled(ct));
         return await tcs.Task;
     }
+
+    /// <summary>Supply the proxy credentials the read loop answers CDP
+    /// <c>Fetch.authRequired</c> challenges with. Call before enabling the Fetch
+    /// domain on a session; with none set, challenges are answered with Default.</summary>
+    public void SetProxyAuth(string username, string password) =>
+        _proxyAuth = (username, password);
+
+    // Answer a proxy auth challenge with the configured credentials (or Default
+    // when none are set). Fire-and-forget from the read loop; never awaited there
+    // (awaiting would deadlock — the response arrives on that same loop).
+    private Task ContinueWithAuthAsync(string sessionId, string requestId)
+    {
+        var response = new JsonObject();
+        if (_proxyAuth is { } creds)
+        {
+            response["response"] = "ProvideCredentials";
+            response["username"] = creds.Username;
+            response["password"] = creds.Password;
+        }
+        else
+        {
+            response["response"] = "Default";
+        }
+        return SendAsync("Fetch.continueWithAuth",
+            new JsonObject { ["requestId"] = requestId, ["authChallengeResponse"] = response },
+            sessionId, _readLoopCts.Token);
+    }
+
+    // Observe a fire-and-forget send's fault so it does not surface as an
+    // unobserved task exception (the read loop does not await these).
+    private static void FireAndForget(Task task) =>
+        task.ContinueWith(t => { _ = t.Exception; },
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
 
     /// <summary>Block until the per-session network-activity tracker reports
     /// zero in-flight requests for <paramref name="debounce"/> (default 500 ms),
@@ -166,6 +208,7 @@ public sealed class CdpClient : ICdpSession, IAsyncDisposable
         catch { /* socket already gone */ }
         _ws.Dispose();
         _readLoopCts.Dispose();
+        _sendLock.Dispose();
         // Fail any still-pending responses.
         lock (_pendingLock)
         {
@@ -243,6 +286,26 @@ public sealed class CdpClient : ICdpSession, IAsyncDisposable
                 // even if no other consumer is reading the queue.
                 var method = parsed["method"]?.GetValue<string>();
                 var sId = parsed["sessionId"]?.GetValue<string>();
+
+                // Proxy auth (CDP Fetch domain): answer the proxy's 407 with
+                // credentials and wave any paused request through, inline here so a
+                // one-shot WaitForEventAsync cannot discard the challenge and hang the
+                // load. Consumed, not queued. Inert unless the transport enabled Fetch
+                // (an authenticated proxy), so the non-proxy path is unchanged.
+                if (method == "Fetch.authRequired" && sId is not null
+                    && parsed["params"]?["requestId"]?.GetValue<string>() is { } authReqId)
+                {
+                    FireAndForget(ContinueWithAuthAsync(sId, authReqId));
+                    continue;
+                }
+                if (method == "Fetch.requestPaused" && sId is not null
+                    && parsed["params"]?["requestId"]?.GetValue<string>() is { } pausedReqId)
+                {
+                    FireAndForget(SendAsync("Fetch.continueRequest",
+                        new JsonObject { ["requestId"] = pausedReqId }, sId, _readLoopCts.Token));
+                    continue;
+                }
+
                 if (sId is not null && method is not null
                     && _networkTrackers.TryGetValue(sId, out var tracker))
                 {

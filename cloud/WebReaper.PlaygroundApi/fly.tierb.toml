@@ -1,0 +1,61 @@
+# Fly config for the Tier B playground backend (Phase 2: the live browser-and-
+# stealth climb). This is a SEPARATE app from the lean Tier A backend, deployed
+# into a DEDICATED Fly org (not `personal`) so a browser SSRF / escape blast
+# radius cannot reach other apps over Fly's 6PN private network (decision 4). The
+# app name + org are chosen at `fly launch` time; see cloud/README.md for the
+# runbook.
+#
+# Deploy from the REPO ROOT (the Docker build context; the Dockerfile copies the
+# library projects from there):
+#
+#   fly deploy --config cloud/WebReaper.PlaygroundApi/fly.tierb.toml
+#
+# PLAYGROUND_BACKEND_SECRET (the X-Playground-Secret the edge injects) is a SECRET
+# set via `fly secrets set`, never committed here.
+
+app = "webreaper-playground-tierb"
+primary_region = "iad"
+
+[build]
+  # Resolved relative to THIS file's directory (not the build context): the
+  # browser-baked image. The build context stays the repo root you deploy from.
+  dockerfile = "Dockerfile.tierb"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Scale to zero between demos; the climb animation masks the cold boot.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  # One hostile browser job per Machine (decision 3). soft_limit routes the 2nd
+  # concurrent request to a 2nd Machine (auto-start) instead of sharing the VM;
+  # hard_limit forbids a VM from ever taking two. Relax hard_limit to 2 if the
+  # health check ever races a long climb (see the runbook).
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 1
+    hard_limit = 1
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/health"
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "10s"
+
+[[vm]]
+  # ~2 GB for headless Chromium + the CloakBrowser fork (decision 5); 2 shared
+  # vCPUs since browser rendering is CPU-bound.
+  size = "shared-cpu-2x"
+  memory = "2048mb"
+
+[env]
+  PLAYGROUND_ALLOWED_ORIGINS = "https://webreaper.ai"
+  # The in-VM egress SSRF firewall (decision 4). warn: apply it, continue with a
+  # loud log if it cannot (e.g. no CAP_NET_ADMIN); enforce: refuse to start
+  # without it; off: skip it (initial bring-up only). See cloud/README.md before
+  # flipping to enforce; the firewall needs one-time validation on the live
+  # Machine. The stealth rung also stays secret-gated until that is done.
+  PLAYGROUND_EGRESS_FIREWALL = "warn"

@@ -57,7 +57,7 @@ RUN dotnet publish cloud/WebReaper.PlaygroundApi/WebReaper.PlaygroundApi.csproj 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        chromium fonts-liberation libicu72 ca-certificates curl \
+        chromium fonts-liberation libicu72 ca-certificates curl nftables \
     && rm -rf /var/lib/apt/lists/*
 RUN curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
     && bash /tmp/dotnet-install.sh --channel 10.0 --runtime aspnetcore --install-dir /usr/share/dotnet \
@@ -66,6 +66,11 @@ RUN curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
 WORKDIR /app
 COPY --from=build /app ./
 COPY --from=cloakbrowser /opt/cloakbrowser /opt/cloakbrowser
+# The in-VM egress SSRF firewall (decision 4) + the entrypoint that applies it
+# before the app starts (nftables is installed above).
+COPY cloud/WebReaper.PlaygroundApi/egress-firewall.nft /app/egress-firewall.nft
+COPY cloud/WebReaper.PlaygroundApi/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 # The browsers launch with --no-sandbox (the Firecracker VM is the trust boundary,
 # decision 5), so the container runs as root, unlike the lean Tier A image.
 # PLAYGROUND_CHROMIUM_PATH / _CLOAKBROWSER_PATH name the two baked binaries.
@@ -73,4 +78,6 @@ ENV ASPNETCORE_URLS=http://+:8080 \
     PLAYGROUND_CHROMIUM_PATH=/usr/bin/chromium \
     PLAYGROUND_CLOAKBROWSER_PATH=/opt/cloakbrowser/chrome
 EXPOSE 8080
-ENTRYPOINT ["dotnet", "WebReaper.PlaygroundApi.dll"]
+# The entrypoint applies the egress firewall (per PLAYGROUND_EGRESS_FIREWALL),
+# then execs the .NET host.
+ENTRYPOINT ["/app/entrypoint.sh"]

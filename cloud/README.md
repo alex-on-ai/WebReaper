@@ -84,3 +84,104 @@ client changes belong with that work (kept out of this change to avoid touching
 
 Until then the gate is dormant; the backend secret + CORS allowlist still let
 you lock the Fly app down independently.
+
+## Tier B (live browser + stealth climb)
+
+Tier B is the second code path in this same app: `GET /tier-b/scrape/stream`
+builds a real WebReaper engine so the ADR-0083 escalating loader climbs HTTP to a
+vanilla browser to the CloakBrowser stealth rung, streaming the live climb over
+SSE. It needs the browsers baked in, so it ships as a **separate image**
+(`Dockerfile.tierb`) deployed as a **separate Fly app in a dedicated org**
+(decision 4: a browser SSRF / escape must not reach other apps over Fly 6PN). The
+lean Tier A app above is untouched.
+
+### Deploy (owner actions)
+
+```bash
+# 1. A dedicated org, so the blast radius is isolated from `personal`.
+fly orgs create webreaper-tierb           # once; pick your own name
+
+# 2. Launch the app into that org (sets the app name + region; no deploy yet).
+fly launch --no-deploy --org webreaper-tierb \
+  --config cloud/WebReaper.PlaygroundApi/fly.tierb.toml
+
+# 3. The shared gate secret (same value as the Tier A app / the Vercel edge).
+fly secrets set PLAYGROUND_BACKEND_SECRET=$(openssl rand -hex 32) \
+  --config cloud/WebReaper.PlaygroundApi/fly.tierb.toml
+
+# 4. Bring it up with the firewall OFF first, to confirm the app + climb work
+#    before adding the network layer (see "Egress firewall" below).
+fly secrets set PLAYGROUND_EGRESS_FIREWALL=off \
+  --config cloud/WebReaper.PlaygroundApi/fly.tierb.toml
+fly deploy --config cloud/WebReaper.PlaygroundApi/fly.tierb.toml   # from the REPO ROOT
+```
+
+The image bakes Chromium (`/usr/bin/chromium`) and the CloakBrowser fork
+(`/opt/cloakbrowser/chrome`) and names them via `PLAYGROUND_CHROMIUM_PATH` /
+`PLAYGROUND_CLOAKBROWSER_PATH`, so no per-deploy browser config is needed. The
+stealth rung is present only because the binary is baked; keep it reachable only
+through the `X-Playground-Secret` gate (never the public edge route) until the
+CloakHQ OEM license lands.
+
+### Egress firewall (decision 4): validate, then enforce
+
+The browser issues its own OS-level requests, bypassing the app-layer SSRF guard,
+so `egress-firewall.nft` lifts the blocklist to the network layer (nftables,
+applied by `entrypoint.sh` per `PLAYGROUND_EGRESS_FIREWALL`). It is **not a
+verified control until validated on a live Machine**; three things can only be
+checked there:
+
+1. **CAP_NET_ADMIN.** `nft -f` needs it. With the firewall in `warn` mode, the
+   Machine logs whether it applied; if it did not, the Machine likely lacks the
+   capability (raise it with Fly support / a Machine config).
+2. **DNS.** Allowed by port (53), not by host, so resolution should work
+   regardless; confirm a climb still resolves names.
+3. **NAT64.** If Fly reaches the IPv4 internet via `64:ff9b::/96`, outbound v4
+   rides inside IPv6 and the `ip daddr` rules never match it. Confirm an internal
+   v4 target is actually blocked (below); if not, re-express the internal ranges
+   as their `64:ff9b::` embeddings.
+
+Rollout:
+
+```bash
+# After the firewall-off deploy works, turn the firewall on in warn mode:
+fly secrets set PLAYGROUND_EGRESS_FIREWALL=warn --config .../fly.tierb.toml
+fly deploy --config .../fly.tierb.toml
+fly logs --config .../fly.tierb.toml         # expect "egress firewall applied"
+
+# Validate from a gated request (replace SECRET + the app URL):
+#  - public scrape works (DNS + egress OK):
+curl -N -H "X-Playground-Secret: $SECRET" \
+  "https://<app>.fly.dev/tier-b/scrape/stream?url=https://example.com"
+#  - an internal target is BLOCKED (expect an error event, not a result):
+curl -N -H "X-Playground-Secret: $SECRET" \
+  "https://<app>.fly.dev/tier-b/scrape/stream?url=http://169.254.169.254/latest/meta-data/"
+
+# Once both hold, enforce (the Machine refuses to start without the firewall):
+fly secrets set PLAYGROUND_EGRESS_FIREWALL=enforce --config .../fly.tierb.toml
+fly deploy --config .../fly.tierb.toml
+```
+
+### Stealth verification (real IPs)
+
+The full HTTP to vanilla to stealth climb and "beats hardened Cloudflare" cannot
+be checked locally (no macOS CloakBrowser build, and emulation is too slow for the
+45s job budget). On the deployed Machine, curl the gated stealth climb against a
+known Cloudflare-challenge target and watch the events escalate to
+`attempt(stealth)` and then `success` or an honest `exhausted`:
+
+```bash
+curl -N -H "X-Playground-Secret: $SECRET" \
+  "https://<app>.fly.dev/tier-b/scrape/stream?url=https://<a-cloudflare-protected-site>"
+```
+
+CloakBrowser's own docs note headless can still be detected by the hardest sites;
+if a target needs it, headed mode + a residential proxy is the next lever (a
+future option, not wired here).
+
+### Env (Tier B additions)
+
+| Side | Variable | Purpose |
+|---|---|---|
+| Fly (Tier B) | `PLAYGROUND_EGRESS_FIREWALL` | `warn` (default) apply + continue on failure; `enforce` refuse to start without it; `off` skip (bring-up only). |
+| Fly (Tier B, baked) | `PLAYGROUND_CHROMIUM_PATH` / `PLAYGROUND_CLOAKBROWSER_PATH` | The two baked browser binaries. Set in the image; override only to relocate them. |

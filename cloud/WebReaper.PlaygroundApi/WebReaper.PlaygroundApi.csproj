@@ -12,6 +12,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\WebReaper\WebReaper.csproj" />
+    <!-- Tier B's vanilla-browser rung: the raw-CDP transport (WithCdpPageLoader).
+         WebReaper.Cdp is self-contained (no PuppeteerSharp / Microsoft.Playwright),
+         so this one reference covers the HTTP-to-browser climb. The stealth rung
+         (WebReaper.Stealth.CloakBrowser) is added in build-order step 3. -->
+    <ProjectReference Include="..\..\WebReaper.Cdp\WebReaper.Cdp.csproj" />
   </ItemGroup>
 
 </Project>

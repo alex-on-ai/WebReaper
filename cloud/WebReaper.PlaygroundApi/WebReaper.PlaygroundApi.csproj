@@ -13,10 +13,12 @@
   <ItemGroup>
     <ProjectReference Include="..\..\WebReaper\WebReaper.csproj" />
     <!-- Tier B's vanilla-browser rung: the raw-CDP transport (WithCdpPageLoader).
-         WebReaper.Cdp is self-contained (no PuppeteerSharp / Microsoft.Playwright),
-         so this one reference covers the HTTP-to-browser climb. The stealth rung
-         (WebReaper.Stealth.CloakBrowser) is added in build-order step 3. -->
+         WebReaper.Cdp is self-contained (no PuppeteerSharp / Microsoft.Playwright). -->
     <ProjectReference Include="..\..\WebReaper.Cdp\WebReaper.Cdp.csproj" />
+    <!-- Tier B's stealth rung: CloakBrowser's recommended launch flags. We launch
+         the binary lazily ourselves (not via the eager WithCloakBrowser) so it
+         only spawns when the climb reaches the stealth tier. -->
+    <ProjectReference Include="..\..\WebReaper.Stealth.CloakBrowser\WebReaper.Stealth.CloakBrowser.csproj" />
   </ItemGroup>
 
 </Project>

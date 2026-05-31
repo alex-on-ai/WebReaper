@@ -1,0 +1,76 @@
+# Tier B playground backend image: the same app as the lean Tier A Dockerfile,
+# plus the two browsers the live climb needs baked in. The vanilla Chromium rung
+# is Debian's `chromium` (which also pulls the shared-library closure the
+# CloakBrowser fork links against); the stealth rung is CloakBrowser's
+# source-patched Chromium fork, fetched and checksum-verified from its GitHub
+# release. Tier A keeps its lean browser-less image (this is a separate
+# Dockerfile, deployed to the dedicated Tier B Fly org in step 4).
+#
+# Build context = the REPO ROOT (the app references the library projects):
+#
+#   docker build -f cloud/WebReaper.PlaygroundApi/Dockerfile.tierb -t webreaper-playground-tierb .
+
+# --- fetch + checksum-verify the CloakBrowser stealth binary ---
+FROM debian:bookworm-slim AS cloakbrowser
+# Pin the version + its SHA256 from the release's SHA256SUMS. linux-x64 is the
+# only Linux asset CloakBrowser publishes (no arm64), so the image is amd64.
+ARG CLOAK_VERSION=chromium-v146.0.7680.177.5
+ARG CLOAK_SHA256=4a12bcde95fa1bb1beef2b41ab5e5c27c36be78e3be3d0dac8c64d705216670e
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN mkdir -p /opt/cloakbrowser \
+    && curl -fsSL -o /tmp/cloakbrowser.tar.gz \
+        "https://github.com/CloakHQ/CloakBrowser/releases/download/${CLOAK_VERSION}/cloakbrowser-linux-x64.tar.gz" \
+    && echo "${CLOAK_SHA256}  /tmp/cloakbrowser.tar.gz" | sha256sum -c - \
+    && tar -xzf /tmp/cloakbrowser.tar.gz -C /opt/cloakbrowser \
+    && rm /tmp/cloakbrowser.tar.gz \
+    && test -x /opt/cloakbrowser/chrome
+
+# --- build the app (SDK tag matches global.json) ---
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+# Restore as its own layer: copy the shared build props + the csprojs only (the
+# whole project graph: WebReaper -> Cdp -> Stealth.CloakBrowser -> the API), so a
+# source-only change does not re-run restore.
+COPY global.json Directory.Build.props ./
+COPY WebReaper/WebReaper.csproj WebReaper/
+COPY WebReaper.Cdp/WebReaper.Cdp.csproj WebReaper.Cdp/
+COPY WebReaper.Stealth.CloakBrowser/WebReaper.Stealth.CloakBrowser.csproj WebReaper.Stealth.CloakBrowser/
+COPY cloud/WebReaper.PlaygroundApi/WebReaper.PlaygroundApi.csproj cloud/WebReaper.PlaygroundApi/
+RUN dotnet restore cloud/WebReaper.PlaygroundApi/WebReaper.PlaygroundApi.csproj
+# Sources, then publish (framework-dependent; the aspnet base carries the runtime).
+COPY WebReaper/ WebReaper/
+COPY WebReaper.Cdp/ WebReaper.Cdp/
+COPY WebReaper.Stealth.CloakBrowser/ WebReaper.Stealth.CloakBrowser/
+COPY cloud/WebReaper.PlaygroundApi/ cloud/WebReaper.PlaygroundApi/
+RUN dotnet publish cloud/WebReaper.PlaygroundApi/WebReaper.PlaygroundApi.csproj \
+    -c Release -o /app --no-restore
+
+# --- runtime: Debian + ASP.NET 10 runtime + both browsers ---
+# Debian (not the .NET aspnet image): .NET 10 ships Ubuntu-only base images, and
+# Ubuntu's `chromium` apt package is a container-hostile snap stub. Debian's
+# `chromium` is a real .deb that runs headless in a container AND pulls the
+# shared-library closure the CloakBrowser fork links against; fonts-liberation
+# keeps headless rendering sane. The ASP.NET Core 10 runtime is installed via the
+# official script (distro-independent).
+FROM debian:bookworm-slim AS runtime
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        chromium fonts-liberation libicu72 ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
+    && bash /tmp/dotnet-install.sh --channel 10.0 --runtime aspnetcore --install-dir /usr/share/dotnet \
+    && ln -sf /usr/share/dotnet/dotnet /usr/bin/dotnet \
+    && rm /tmp/dotnet-install.sh
+WORKDIR /app
+COPY --from=build /app ./
+COPY --from=cloakbrowser /opt/cloakbrowser /opt/cloakbrowser
+# The browsers launch with --no-sandbox (the Firecracker VM is the trust boundary,
+# decision 5), so the container runs as root, unlike the lean Tier A image.
+# PLAYGROUND_CHROMIUM_PATH / _CLOAKBROWSER_PATH name the two baked binaries.
+ENV ASPNETCORE_URLS=http://+:8080 \
+    PLAYGROUND_CHROMIUM_PATH=/usr/bin/chromium \
+    PLAYGROUND_CLOAKBROWSER_PATH=/opt/cloakbrowser/chrome
+EXPOSE 8080
+ENTRYPOINT ["dotnet", "WebReaper.PlaygroundApi.dll"]

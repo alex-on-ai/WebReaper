@@ -32,8 +32,14 @@ var backendSecret = Environment.GetEnvironmentVariable("PLAYGROUND_BACKEND_SECRE
 // the CDP launcher searches PATH (local dev). Fail-soft seam, like the others.
 var chromiumPath = Environment.GetEnvironmentVariable("PLAYGROUND_CHROMIUM_PATH");
 
+// Tier B's stealth rung. When PLAYGROUND_CLOAKBROWSER_PATH names a baked
+// CloakBrowser binary the climb gains a stealth tier above the vanilla browser;
+// unset => HTTP + vanilla only. Stays behind the X-Playground-Secret gate (never
+// the public edge route) until the CloakHQ OEM license lands.
+var cloakBrowserPath = Environment.GetEnvironmentVariable("PLAYGROUND_CLOAKBROWSER_PATH");
+
 builder.Services.AddSingleton<TierAScraper>();
-builder.Services.AddSingleton(new TierBScraper(chromiumPath));
+builder.Services.AddSingleton(new TierBScraper(chromiumPath, cloakBrowserPath));
 
 var app = builder.Build();
 app.UseCors();

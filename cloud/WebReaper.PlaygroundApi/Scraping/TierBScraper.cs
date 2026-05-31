@@ -1,7 +1,9 @@
+using System.Net;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using WebReaper.Builders;
 using WebReaper.Cdp;
+using WebReaper.Proxy.Abstract;
 using WebReaper.Stealth.CloakBrowser;
 
 namespace WebReaper.PlaygroundApi.Scraping;
@@ -43,6 +45,15 @@ public sealed class TierBScraper
 
     private readonly string? _chromiumPath;
     private readonly string? _cloakBrowserPath;
+    // The --proxy-server value for the browser launches (scheme://host:port, no
+    // credentials -- Chromium rejects creds there); null = no proxy (direct).
+    private readonly string? _proxyServerArg;
+    // Supplies the credentials the CDP transport answers Fetch.authRequired with;
+    // null = no proxy, or an IP-allowlisted proxy that needs no auth.
+    private readonly IProxyProvider? _proxyProvider;
+    // Run the browser rungs headed (no --headless) under a virtual display (the
+    // image's Xvfb provides DISPLAY). CloakBrowser's recipe for the hardest sites.
+    private readonly bool _headed;
 
     /// <param name="chromiumPath">Absolute path to the baked Chromium binary (the
     /// Docker image's Playwright Chromium). <c>null</c> lets the CDP launcher
@@ -52,11 +63,38 @@ public sealed class TierBScraper
     /// <c>null</c> means HTTP + vanilla browser only.</param>
     /// <param name="jobSeconds">Per-job wall-clock budget in seconds (default 45).
     /// A full stealth climb against a slow Cloudflare challenge needs more.</param>
-    public TierBScraper(string? chromiumPath = null, string? cloakBrowserPath = null, int jobSeconds = 45)
+    /// <param name="residentialProxy">Optional residential proxy URL
+    /// (<c>scheme://user:pass@host:port</c>) the browser rungs route through, so the
+    /// stealth climb exits via a residential IP rather than the datacenter IP that
+    /// Cloudflare's managed challenge holds. <c>null</c> = direct.</param>
+    /// <param name="headed">Run the browser rungs headed (no <c>--headless</c>) under
+    /// a virtual display (the image's Xvfb). CloakBrowser's recipe for the hardest
+    /// bot-checks; <c>false</c> = headless (local dev / CLI).</param>
+    public TierBScraper(string? chromiumPath = null, string? cloakBrowserPath = null, int jobSeconds = 45, string? residentialProxy = null, bool headed = false)
     {
         _chromiumPath = chromiumPath;
         _cloakBrowserPath = cloakBrowserPath;
         _runTimeout = TimeSpan.FromSeconds(jobSeconds > 0 ? jobSeconds : 45);
+        (_proxyServerArg, _proxyProvider) = ParseProxy(residentialProxy);
+        _headed = headed;
+    }
+
+    // Split a residential proxy URL into the --proxy-server value (no creds) and an
+    // IProxyProvider carrying the credentials for the CDP proxy-auth handshake.
+    private static (string?, IProxyProvider?) ParseProxy(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return (null, null);
+        var normalized = raw.Contains("://", StringComparison.Ordinal) ? raw : "http://" + raw;
+        if (!Uri.TryCreate(normalized, UriKind.Absolute, out var uri)) return (null, null);
+        var serverArg = $"{uri.Scheme}://{uri.Host}:{uri.Port}";
+        if (string.IsNullOrEmpty(uri.UserInfo))
+            return (serverArg, null); // proxy without auth (e.g. IP-allowlisted)
+        var parts = uri.UserInfo.Split(':', 2);
+        var cred = new NetworkCredential(
+            Uri.UnescapeDataString(parts[0]),
+            parts.Length > 1 ? Uri.UnescapeDataString(parts[1]) : string.Empty);
+        var webProxy = new WebProxy(new Uri(serverArg)) { Credentials = cred };
+        return (serverArg, new StaticWebProxyProvider(webProxy));
     }
 
     public async IAsyncEnumerable<object> StreamAsync(
@@ -137,12 +175,12 @@ public sealed class TierBScraper
                 .AsMarkdown()
                 .WithLoadTransport((cookies, proxy, logger, actionResolver) =>
                     new CdpPageLoadTransport(vanilla.ProvideCdpUrlAsync, disposeUrlProvider: null,
-                        cookies, proxy, logger, actionResolver));
+                        cookies, _proxyProvider ?? proxy, logger, actionResolver));
 
             if (stealth is not null)
                 builder = builder.WithLoadTransport((cookies, proxy, logger, actionResolver) =>
                     new CdpPageLoadTransport(stealth.ProvideCdpUrlAsync, disposeUrlProvider: null,
-                        cookies, proxy, logger, actionResolver));
+                        cookies, _proxyProvider ?? proxy, logger, actionResolver));
 
             await using var engine = await builder
                 .WithClimbObserver(observer)
@@ -188,15 +226,15 @@ public sealed class TierBScraper
             ?? CdpLaunchHelpers.FindOnPath(ChromiumNames)
             ?? throw new InvalidOperationException(
                 "No Chromium binary found. Set PLAYGROUND_CHROMIUM_PATH or install Chrome/Chromium.");
+        var args = new List<string> { "--no-sandbox", "--disable-dev-shm-usage" };
+        args.Add(_headed ? "--window-size=1920,1080" : "--headless=new");
+        if (_proxyServerArg is not null) args.Add($"--proxy-server={_proxyServerArg}");
         return CdpLaunchHelpers.LaunchAsync(
-            new CdpLaunchSpec(
-                executable,
-                ["--headless=new", "--no-sandbox", "--disable-dev-shm-usage"],
-                // The first browser launch on a scale-to-zero Fly Machine is a cold
-                // start: the Chromium binary + shared libs page in from disk, which
-                // exceeded the old 20s cap and threw a launch TimeoutException. 60s
-                // gives cold-start headroom; a warm relaunch still returns in seconds.
-                StartupTimeout: TimeSpan.FromSeconds(60)),
+            // The first browser launch on a scale-to-zero Fly Machine is a cold start:
+            // the Chromium binary + shared libs page in from disk, which exceeded the
+            // old 20s cap and threw a launch TimeoutException. 60s gives cold-start
+            // headroom; a warm relaunch still returns in seconds.
+            new CdpLaunchSpec(executable, args, StartupTimeout: TimeSpan.FromSeconds(60)),
             cancellationToken);
     }
 
@@ -206,7 +244,9 @@ public sealed class TierBScraper
     // the trust boundary, decision 5).
     private Task<LaunchedCdpEndpoint> LaunchStealthAsync(CancellationToken cancellationToken)
     {
-        var args = new List<string>(CloakBrowserLauncher.RecommendedArgs) { "--no-sandbox", "--headless=new" };
+        var args = new List<string>(CloakBrowserLauncher.RecommendedArgs) { "--no-sandbox" };
+        args.Add(_headed ? "--window-size=1920,1080" : "--headless=new");
+        if (_proxyServerArg is not null) args.Add($"--proxy-server={_proxyServerArg}");
         return CdpLaunchHelpers.LaunchAsync(
             // 60s cold-start headroom, matching the vanilla rung (see LaunchVanillaAsync).
             new CdpLaunchSpec(_cloakBrowserPath!, args, StartupTimeout: TimeSpan.FromSeconds(60)),

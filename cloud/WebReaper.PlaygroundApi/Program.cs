@@ -43,8 +43,19 @@ var cloakBrowserPath = Environment.GetEnvironmentVariable("PLAYGROUND_CLOAKBROWS
 // more (each browser rung can wait up to 30s for the challenge page to load).
 var jobSeconds = int.TryParse(Environment.GetEnvironmentVariable("PLAYGROUND_TIERB_JOB_SECONDS"), out var js) && js > 0 ? js : 45;
 
+// Optional residential proxy the browser rungs route through
+// (scheme://user:pass@host:port), so the stealth climb exits via a residential IP
+// instead of the datacenter IP that Cloudflare's managed challenge holds. Unset =
+// direct. Set as a Fly secret (it carries credentials).
+var residentialProxy = Environment.GetEnvironmentVariable("PLAYGROUND_RESIDENTIAL_PROXY");
+
+// Run the browser rungs headed (no --headless) under the image's Xvfb virtual
+// display -- CloakBrowser's recipe for the hardest bot-checks. The entrypoint starts
+// Xvfb + sets DISPLAY when this is set; unset = headless (local dev / CLI).
+var headed = Environment.GetEnvironmentVariable("PLAYGROUND_HEADED") is "1" or "true";
+
 builder.Services.AddSingleton<TierAScraper>();
-builder.Services.AddSingleton(new TierBScraper(chromiumPath, cloakBrowserPath, jobSeconds));
+builder.Services.AddSingleton(new TierBScraper(chromiumPath, cloakBrowserPath, jobSeconds, residentialProxy, headed));
 
 var app = builder.Build();
 app.UseCors();

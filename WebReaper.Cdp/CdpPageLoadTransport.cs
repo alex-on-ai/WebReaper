@@ -99,6 +99,24 @@ public sealed class CdpPageLoadTransport : IPageLoadTransport, IAsyncDisposable
             await browser.SendAsync("Runtime.enable", null, sessionId, cancellationToken);
             await browser.SendAsync("Network.enable", null, sessionId, cancellationToken);
 
+            // Authenticated proxy: the browser is launched with --proxy-server but
+            // Chromium has no proxy-auth flag, so enable the Fetch domain and let the
+            // read loop answer the proxy's 407 with the IProxyProvider's credentials.
+            // handleAuthRequests with no patterns intercepts requests (waved through
+            // with Fetch.continueRequest) and surfaces auth challenges. Inert when no
+            // proxy is configured.
+            if (_proxyProvider is not null)
+            {
+                var webProxy = await _proxyProvider.GetProxyAsync();
+                var cred = webProxy.Credentials as NetworkCredential
+                    ?? (webProxy.Address is not null ? webProxy.Credentials?.GetCredential(webProxy.Address, "Basic") : null);
+                if (cred is not null && !string.IsNullOrEmpty(cred.UserName))
+                    browser.SetProxyAuth(cred.UserName, cred.Password);
+                await browser.SendAsync("Fetch.enable",
+                    new JsonObject { ["handleAuthRequests"] = true },
+                    sessionId, cancellationToken);
+            }
+
             // Apply stored cookies (best-effort; CDP rejects malformed entries
             // — we swallow per-cookie failures via a try/catch on the batch).
             await ApplyCookiesAsync(browser, sessionId, request.Url, cancellationToken);

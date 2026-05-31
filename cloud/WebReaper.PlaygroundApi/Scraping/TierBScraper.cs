@@ -1,7 +1,9 @@
+using System.Net;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using WebReaper.Builders;
 using WebReaper.Cdp;
+using WebReaper.Proxy.Abstract;
 using WebReaper.Stealth.CloakBrowser;
 
 namespace WebReaper.PlaygroundApi.Scraping;
@@ -43,6 +45,26 @@ public sealed class TierBScraper
 
     private readonly string? _chromiumPath;
     private readonly string? _cloakBrowserPath;
+    // The --proxy-server value for the browser launches (scheme://host:port, no
+    // credentials -- Chromium rejects creds there); null = no proxy (direct).
+    private readonly string? _proxyServerArg;
+    // Supplies the credentials the CDP transport answers Fetch.authRequired with;
+    // null = no proxy, or an IP-allowlisted proxy that needs no auth.
+    private readonly IProxyProvider? _proxyProvider;
+    // Run the browser rungs headed (no --headless) under a virtual display (the
+    // image's Xvfb provides DISPLAY). CloakBrowser's recipe for the hardest sites.
+    private readonly bool _headed;
+    // CloakBrowser fingerprint profile for the stealth rung (replicates the vendor
+    // python wrapper's build_args on Linux). The wrapper presents Linux sessions as
+    // Windows desktops ("windows" -- the commonest fingerprint, harder to cluster);
+    // "macos"/"linux" are the other values. Timezone/locale align the fingerprint to
+    // the proxy's exit geo -- the vendor's geoip=True derives these from the exit IP,
+    // which we cannot do here, so they are opt-in config (a residential proxy in a
+    // different geo than the container's UTC/en-US default is itself a weak signal
+    // without them).
+    private readonly string _fingerprintPlatform;
+    private readonly string? _fingerprintTimezone;
+    private readonly string? _fingerprintLocale;
 
     /// <param name="chromiumPath">Absolute path to the baked Chromium binary (the
     /// Docker image's Playwright Chromium). <c>null</c> lets the CDP launcher
@@ -52,11 +74,50 @@ public sealed class TierBScraper
     /// <c>null</c> means HTTP + vanilla browser only.</param>
     /// <param name="jobSeconds">Per-job wall-clock budget in seconds (default 45).
     /// A full stealth climb against a slow Cloudflare challenge needs more.</param>
-    public TierBScraper(string? chromiumPath = null, string? cloakBrowserPath = null, int jobSeconds = 45)
+    /// <param name="residentialProxy">Optional residential proxy URL
+    /// (<c>scheme://user:pass@host:port</c>) the browser rungs route through, so the
+    /// stealth climb exits via a residential IP rather than the datacenter IP that
+    /// Cloudflare's managed challenge holds. <c>null</c> = direct.</param>
+    /// <param name="headed">Run the browser rungs headed (no <c>--headless</c>) under
+    /// a virtual display (the image's Xvfb). CloakBrowser's recipe for the hardest
+    /// bot-checks; <c>false</c> = headless (local dev / CLI).</param>
+    /// <param name="fingerprintPlatform">CloakBrowser <c>--fingerprint-platform</c>
+    /// value for the stealth rung (default <c>"windows"</c>, the common desktop
+    /// profile the vendor wrapper forces on Linux).</param>
+    /// <param name="fingerprintTimezone">Optional IANA timezone (e.g.
+    /// <c>America/New_York</c>) aligning the stealth fingerprint to the proxy's exit
+    /// geo; <c>null</c> = the container default (UTC).</param>
+    /// <param name="fingerprintLocale">Optional locale (e.g. <c>en-US</c>) aligning the
+    /// stealth fingerprint to the proxy's exit geo; <c>null</c> = the container
+    /// default (en-US).</param>
+    public TierBScraper(string? chromiumPath = null, string? cloakBrowserPath = null, int jobSeconds = 45, string? residentialProxy = null, bool headed = false, string fingerprintPlatform = "windows", string? fingerprintTimezone = null, string? fingerprintLocale = null)
     {
         _chromiumPath = chromiumPath;
         _cloakBrowserPath = cloakBrowserPath;
         _runTimeout = TimeSpan.FromSeconds(jobSeconds > 0 ? jobSeconds : 45);
+        (_proxyServerArg, _proxyProvider) = ParseProxy(residentialProxy);
+        _headed = headed;
+        _fingerprintPlatform = string.IsNullOrWhiteSpace(fingerprintPlatform) ? "windows" : fingerprintPlatform;
+        _fingerprintTimezone = string.IsNullOrWhiteSpace(fingerprintTimezone) ? null : fingerprintTimezone;
+        _fingerprintLocale = string.IsNullOrWhiteSpace(fingerprintLocale) ? null : fingerprintLocale;
+    }
+
+    // Split a residential proxy URL into the --proxy-server value (no creds) and an
+    // IProxyProvider carrying the credentials for the CDP proxy-auth handshake.
+    private static (string?, IProxyProvider?) ParseProxy(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return (null, null);
+        var normalized = raw.Contains("://", StringComparison.Ordinal) ? raw : "http://" + raw;
+        if (!Uri.TryCreate(normalized, UriKind.Absolute, out var uri)) return (null, null);
+        var serverArg = $"{uri.Scheme}://{uri.Host}:{uri.Port}";
+        if (string.IsNullOrEmpty(uri.UserInfo))
+            return (serverArg, null); // proxy without auth (e.g. IP-allowlisted)
+        var parts = uri.UserInfo.Split(':', 2);
+        var cred = new NetworkCredential(
+            Uri.UnescapeDataString(parts[0]),
+            parts.Length > 1 ? Uri.UnescapeDataString(parts[1]) : string.Empty);
+        var webProxy = new WebProxy(new Uri(serverArg)) { Credentials = cred };
+        return (serverArg, new StaticWebProxyProvider(webProxy));
     }
 
     public async IAsyncEnumerable<object> StreamAsync(
@@ -137,12 +198,12 @@ public sealed class TierBScraper
                 .AsMarkdown()
                 .WithLoadTransport((cookies, proxy, logger, actionResolver) =>
                     new CdpPageLoadTransport(vanilla.ProvideCdpUrlAsync, disposeUrlProvider: null,
-                        cookies, proxy, logger, actionResolver));
+                        cookies, _proxyProvider ?? proxy, logger, actionResolver));
 
             if (stealth is not null)
                 builder = builder.WithLoadTransport((cookies, proxy, logger, actionResolver) =>
                     new CdpPageLoadTransport(stealth.ProvideCdpUrlAsync, disposeUrlProvider: null,
-                        cookies, proxy, logger, actionResolver));
+                        cookies, _proxyProvider ?? proxy, logger, actionResolver));
 
             await using var engine = await builder
                 .WithClimbObserver(observer)
@@ -188,29 +249,81 @@ public sealed class TierBScraper
             ?? CdpLaunchHelpers.FindOnPath(ChromiumNames)
             ?? throw new InvalidOperationException(
                 "No Chromium binary found. Set PLAYGROUND_CHROMIUM_PATH or install Chrome/Chromium.");
+        var args = new List<string> { "--no-sandbox", "--disable-dev-shm-usage" };
+        args.Add(_headed ? "--window-size=1920,1080" : "--headless=new");
+        if (_proxyServerArg is not null) args.Add($"--proxy-server={_proxyServerArg}");
         return CdpLaunchHelpers.LaunchAsync(
-            new CdpLaunchSpec(
-                executable,
-                ["--headless=new", "--no-sandbox", "--disable-dev-shm-usage"],
-                // The first browser launch on a scale-to-zero Fly Machine is a cold
-                // start: the Chromium binary + shared libs page in from disk, which
-                // exceeded the old 20s cap and threw a launch TimeoutException. 60s
-                // gives cold-start headroom; a warm relaunch still returns in seconds.
-                StartupTimeout: TimeSpan.FromSeconds(60)),
+            // The first browser launch on a scale-to-zero Fly Machine is a cold start:
+            // the Chromium binary + shared libs page in from disk, which exceeded the
+            // old 20s cap and threw a launch TimeoutException. 60s gives cold-start
+            // headroom; a warm relaunch still returns in seconds.
+            new CdpLaunchSpec(executable, args, StartupTimeout: TimeSpan.FromSeconds(60)),
             cancellationToken);
     }
 
-    // The stealth rung (CloakBrowser, gated on the configured binary). The vendor's
-    // RecommendedArgs are hardened-Chromium sanity flags; the stealth is in the
-    // binary. --no-sandbox is added because the container runs as root (the VM is
-    // the trust boundary, decision 5).
+    // The stealth rung (CloakBrowser, gated on the configured binary). Launches with
+    // the vendor's full stealth recipe (see BuildStealthArgs) -- the .NET launcher
+    // used to pass only RecommendedArgs sanity flags, so on a software-GL host the
+    // browser ran with no fingerprint profile and, headless, no WebGL context at all
+    // (an instant bot tell). --no-sandbox is added because the container runs as root
+    // (the VM is the trust boundary, decision 5).
     private Task<LaunchedCdpEndpoint> LaunchStealthAsync(CancellationToken cancellationToken)
     {
-        var args = new List<string>(CloakBrowserLauncher.RecommendedArgs) { "--no-sandbox", "--headless=new" };
+        // Per-launch fingerprint seed, matching the vendor wrapper (random 10000-99999):
+        // the binary derives GPU / hardware-concurrency / device-memory / screen from
+        // it, so a fresh seed per job is a fresh stealth identity (Tier B scrapes one
+        // URL per job, so there is no multi-page identity to keep stable).
+        var seed = Random.Shared.Next(10000, 100000);
+        var args = BuildStealthArgs(_headed, _proxyServerArg, _fingerprintPlatform, seed, _fingerprintTimezone, _fingerprintLocale);
         return CdpLaunchHelpers.LaunchAsync(
             // 60s cold-start headroom, matching the vanilla rung (see LaunchVanillaAsync).
             new CdpLaunchSpec(_cloakBrowserPath!, args, StartupTimeout: TimeSpan.FromSeconds(60)),
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Build the CloakBrowser stealth launch args, replicating the vendor python
+    /// wrapper's <c>build_args</c> recipe on Linux. The binary's source-level patches
+    /// do the stealth; these args select the right profile (the launcher previously
+    /// omitted them, leaving a bare browser):
+    /// <list type="bullet">
+    /// <item><c>--fingerprint=&lt;seed&gt;</c>: master seed the binary derives the
+    /// GPU / hardware-concurrency / device-memory / screen profile from.</item>
+    /// <item><c>--fingerprint-platform</c>: present as Windows (the common desktop
+    /// profile the wrapper forces on Linux) instead of the binary's native Linux.</item>
+    /// <item><c>--ignore-gpu-blocklist</c> (headed only): lets SwiftShader serve WebGL
+    /// under Xvfb in a GPU-less container. Without it, headed software-GL Chromium
+    /// blocks WebGL on the software GPU and the page has no WebGL context (the tell
+    /// this fix removes). Headless cannot get WebGL even with the flag, so it is gated
+    /// on headed rather than added inertly.</item>
+    /// <item><c>--fingerprint-timezone</c> / <c>--lang</c> + <c>--fingerprint-locale</c>:
+    /// align the fingerprint to the proxy's exit geo when configured.</item>
+    /// </list>
+    /// Pure (no I/O) so the recipe is unit-testable; <see cref="LaunchStealthAsync"/>
+    /// supplies the per-launch seed.
+    /// </summary>
+    public static List<string> BuildStealthArgs(bool headed, string? proxyServerArg, string fingerprintPlatform, int fingerprintSeed, string? timezone = null, string? locale = null)
+    {
+        var args = new List<string>(CloakBrowserLauncher.RecommendedArgs) { "--no-sandbox" };
+        args.Add($"--fingerprint={fingerprintSeed}");
+        args.Add($"--fingerprint-platform={fingerprintPlatform}");
+        if (headed)
+        {
+            args.Add("--window-size=1920,1080");
+            args.Add("--ignore-gpu-blocklist");
+        }
+        else
+        {
+            args.Add("--headless=new");
+        }
+        if (proxyServerArg is not null) args.Add($"--proxy-server={proxyServerArg}");
+        if (!string.IsNullOrWhiteSpace(timezone)) args.Add($"--fingerprint-timezone={timezone}");
+        if (!string.IsNullOrWhiteSpace(locale))
+        {
+            args.Add($"--lang={locale}");
+            args.Add($"--fingerprint-locale={locale}");
+        }
+        return args;
     }
 
     private static string DescribeFailure(Exception ex) => ex switch

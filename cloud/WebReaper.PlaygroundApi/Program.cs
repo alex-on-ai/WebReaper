@@ -43,8 +43,29 @@ var cloakBrowserPath = Environment.GetEnvironmentVariable("PLAYGROUND_CLOAKBROWS
 // more (each browser rung can wait up to 30s for the challenge page to load).
 var jobSeconds = int.TryParse(Environment.GetEnvironmentVariable("PLAYGROUND_TIERB_JOB_SECONDS"), out var js) && js > 0 ? js : 45;
 
+// Optional residential proxy the browser rungs route through
+// (scheme://user:pass@host:port), so the stealth climb exits via a residential IP
+// instead of the datacenter IP that Cloudflare's managed challenge holds. Unset =
+// direct. Set as a Fly secret (it carries credentials).
+var residentialProxy = Environment.GetEnvironmentVariable("PLAYGROUND_RESIDENTIAL_PROXY");
+
+// Run the browser rungs headed (no --headless) under the image's Xvfb virtual
+// display -- CloakBrowser's recipe for the hardest bot-checks. The entrypoint starts
+// Xvfb + sets DISPLAY when this is set; unset = headless (local dev / CLI).
+var headed = Environment.GetEnvironmentVariable("PLAYGROUND_HEADED") is "1" or "true";
+
+// CloakBrowser stealth fingerprint profile (replicates the vendor wrapper's
+// build_args). Platform defaults to "windows" (the common desktop profile the
+// wrapper forces on Linux). Set PLAYGROUND_CLOAK_TIMEZONE (IANA, e.g.
+// America/New_York) + PLAYGROUND_CLOAK_LOCALE (e.g. en-US) to match the residential
+// proxy's exit country; the vendor's geoip=True derives these from the exit IP,
+// which we cannot, so they are explicit. Unset = the container default (UTC/en-US).
+var cloakFingerprintPlatform = Environment.GetEnvironmentVariable("PLAYGROUND_CLOAK_FINGERPRINT_PLATFORM") ?? "windows";
+var cloakTimezone = Environment.GetEnvironmentVariable("PLAYGROUND_CLOAK_TIMEZONE");
+var cloakLocale = Environment.GetEnvironmentVariable("PLAYGROUND_CLOAK_LOCALE");
+
 builder.Services.AddSingleton<TierAScraper>();
-builder.Services.AddSingleton(new TierBScraper(chromiumPath, cloakBrowserPath, jobSeconds));
+builder.Services.AddSingleton(new TierBScraper(chromiumPath, cloakBrowserPath, jobSeconds, residentialProxy, headed, cloakFingerprintPlatform, cloakTimezone, cloakLocale));
 
 var app = builder.Build();
 app.UseCors();

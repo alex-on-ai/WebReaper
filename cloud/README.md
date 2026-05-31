@@ -123,6 +123,29 @@ stealth rung is present only because the binary is baked; keep it reachable only
 through the `X-Playground-Secret` gate (never the public edge route) until the
 CloakHQ OEM license lands.
 
+### Stealth tuning (software-GL hosts)
+
+The stealth rung replicates CloakBrowser's own launch recipe (the vendor's python
+`build_args`), which the bare `RecommendedArgs` did not. These tune it:
+
+| Variable | Purpose |
+|---|---|
+| `PLAYGROUND_HEADED` | `1`/`true` runs the browser rungs headed under the image's Xvfb. **Required for WebGL on a GPU-less host:** headless software-GL Chromium has no WebGL context at all (an instant bot tell); headed + the blocklist bypass lets SwiftShader serve it. |
+| `PLAYGROUND_RESIDENTIAL_PROXY` | `scheme://user:pass@host:port`. Routes the browser rungs through a residential IP. A datacenter IP is its own hard Cloudflare gate, independent of the browser, so this is needed before the stealth rung has any chance on a real target. Carries credentials: set as a Fly secret. |
+| `PLAYGROUND_CLOAK_FINGERPRINT_PLATFORM` | `--fingerprint-platform` for the stealth rung (default `windows`, the common desktop profile the vendor forces on Linux; `macos`/`linux` are the alternatives). |
+| `PLAYGROUND_CLOAK_TIMEZONE` / `PLAYGROUND_CLOAK_LOCALE` | IANA timezone (e.g. `America/New_York`) + locale (e.g. `en-US`) aligning the fingerprint to the proxy's exit country. The vendor's `geoip=True` derives these from the exit IP; we cannot, so set them to match the proxy. Unset = the container default (UTC / en-US), itself a weak mismatch signal behind a foreign-geo proxy. |
+
+Honest scope (diagnosed 2026-05-31): this recipe turns "no WebGL / bare browser"
+into a real Windows stealth profile with WebGL via SwiftShader, which unblocks the
+**lighter** Cloudflare challenges that are the common case. It does **not**, on its
+own, clear the hardest managed-challenge fixtures (e.g.
+`scrapingcourse.com/cloudflare-challenge`) from a software-GL host: that fixture
+reads the actual render output, and SwiftShader pixels lose to a real GPU even with
+a clean residential IP. Treat the hardest fixtures as honest-loss (the climb-viz
+already shows the real outcome), or front them with a real-GPU host / managed
+unblocker. The stealth rung stays `X-Playground-Secret`-gated regardless until the
+OEM license lands.
+
 ### Egress firewall (decision 4): validate, then enforce
 
 The browser issues its own OS-level requests, bypassing the app-layer SSRF guard,

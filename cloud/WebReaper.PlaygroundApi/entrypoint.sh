@@ -24,4 +24,14 @@ if [ "$MODE" != "off" ]; then
     fi
 fi
 
+# Headed mode (CloakBrowser's recipe for the hardest bot-checks): run the browsers
+# under a virtual X display so they launch headed (no --headless) on this screenless
+# VM. Only when PLAYGROUND_HEADED is set; the app reads the same flag to drop
+# --headless from the browser launches.
+if [ "${PLAYGROUND_HEADED:-}" = "1" ] || [ "${PLAYGROUND_HEADED:-}" = "true" ]; then
+    Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp >/tmp/xvfb.log 2>&1 &
+    export DISPLAY=:99
+    echo "[entrypoint] started Xvfb on :99 (headed mode)"
+fi
+
 exec dotnet WebReaper.PlaygroundApi.dll

@@ -147,6 +147,13 @@ public sealed class TierBScraper
             await using var engine = await builder
                 .WithClimbObserver(observer)
                 .AddSink(sink)
+                // The climb already escalates HTTP -> vanilla -> stealth internally
+                // on each block; the core default's four-attempt whole-crawl retry
+                // would replay the entire multi-minute browser climb from the lifted
+                // host floor on a transient transport throw (the duplicate
+                // attempt(browser)). One attempt is the right bound for a single-URL
+                // scrape.
+                .WithRetryPolicy(new SingleAttemptRetryPolicy())
                 .StopWhenAllLinksProcessed()
                 .BuildAsync();
 
@@ -185,7 +192,11 @@ public sealed class TierBScraper
             new CdpLaunchSpec(
                 executable,
                 ["--headless=new", "--no-sandbox", "--disable-dev-shm-usage"],
-                StartupTimeout: TimeSpan.FromSeconds(20)),
+                // The first browser launch on a scale-to-zero Fly Machine is a cold
+                // start: the Chromium binary + shared libs page in from disk, which
+                // exceeded the old 20s cap and threw a launch TimeoutException. 60s
+                // gives cold-start headroom; a warm relaunch still returns in seconds.
+                StartupTimeout: TimeSpan.FromSeconds(60)),
             cancellationToken);
     }
 
@@ -197,7 +208,8 @@ public sealed class TierBScraper
     {
         var args = new List<string>(CloakBrowserLauncher.RecommendedArgs) { "--no-sandbox", "--headless=new" };
         return CdpLaunchHelpers.LaunchAsync(
-            new CdpLaunchSpec(_cloakBrowserPath!, args, StartupTimeout: TimeSpan.FromSeconds(30)),
+            // 60s cold-start headroom, matching the vanilla rung (see LaunchVanillaAsync).
+            new CdpLaunchSpec(_cloakBrowserPath!, args, StartupTimeout: TimeSpan.FromSeconds(60)),
             cancellationToken);
     }
 

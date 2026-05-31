@@ -131,8 +131,23 @@ public sealed class CdpPageLoadTransport : IPageLoadTransport, IAsyncDisposable
                 }
             }
 
+            // Capture the rendered DOM. JS bot-checks (Cloudflare et al.) serve an
+            // interstitial that loads, runs a challenge, then redirects to the real
+            // content, so a single capture at the load event grabs the "verifying
+            // you are human" page. When the DOM looks like an interstitial, poll
+            // until it clears (a stealth browser that passes the check yields the
+            // real DOM) or a cap elapses (a browser that cannot pass stays on the
+            // interstitial, which the block detector then flags). Real pages capture
+            // immediately: the marker check fails on the first read.
             var html = await CdpPageActionDispatcher.EvaluateAsync(browser, sessionId,
                 "document.documentElement.outerHTML", cancellationToken);
+            var interstitialDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
+            while (LooksLikeInterstitial(html) && DateTime.UtcNow < interstitialDeadline)
+            {
+                await Task.Delay(1500, cancellationToken);
+                html = await CdpPageActionDispatcher.EvaluateAsync(browser, sessionId,
+                    "document.documentElement.outerHTML", cancellationToken);
+            }
             // ADR-0083 slice 1: the CDP transport returns the rendered DOM with a
             // null HttpStatus and no headers. Capturing the main-document status
             // via Network.responseReceived is the ADR-named follow-up; browser-
@@ -153,6 +168,24 @@ public sealed class CdpPageLoadTransport : IPageLoadTransport, IAsyncDisposable
             catch { /* best-effort cleanup */ }
         }
     }
+
+    // The JS-challenge interstitial pages a bot-check serves before redirecting to
+    // the real content. Deliberately narrow: these strings appear on the "verifying
+    // you are human" page, not on real content, so a stealth browser that clears
+    // the challenge no longer matches and its real DOM is captured. Kept local so
+    // the AOT-clean transport does not depend on core's IBlockDetector.
+    private static readonly string[] InterstitialMarkers =
+    [
+        "Just a moment",
+        "Performing security verification",
+        "challenge-platform",
+        "cf-browser-verification",
+        "_cf_chl_opt",
+    ];
+
+    private static bool LooksLikeInterstitial(string? html) =>
+        !string.IsNullOrEmpty(html)
+        && Array.Exists(InterstitialMarkers, m => html.Contains(m, StringComparison.OrdinalIgnoreCase));
 
     // ADR-0035 closed-sum dispatch — delegated to CdpPageActionDispatcher
     // (extracted in ADR-0057 follow-up so the dispatch table is testable

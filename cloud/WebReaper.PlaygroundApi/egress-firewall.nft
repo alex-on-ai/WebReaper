@@ -1,0 +1,67 @@
+#!/usr/sbin/nft -f
+#
+# Tier B in-VM egress SSRF firewall (Phase 2 doc, decision 4).
+#
+# Once Chromium drives the page it issues its own OS-level requests (subresources,
+# redirects, fetch / XHR, WebSocket) straight from the kernel, bypassing the app's
+# DNS-pinned HttpClient guard. This lifts the Phase 1 SsrfPolicy blocklist to the
+# network layer, where it covers every rung including the browser: the public
+# internet is allowed; private / loopback / link-local (incl. the 169.254.169.254
+# cloud-metadata address) / CGNAT / Fly 6PN (fdaa::/8) destinations are dropped.
+# DNS and the app <-> launched-browser CDP loopback stay open so scraping works.
+#
+# VALIDATE ON DEPLOY (see cloud/README.md). Three things can only be confirmed on
+# a live Fly Machine, and the firewall is not a verified control until they are:
+#   1. CAP_NET_ADMIN must be present for `nft -f` to apply at all.
+#   2. The resolver address: DNS is allowed by port (53) here, not by host, so it
+#      works regardless, but confirm name resolution still succeeds.
+#   3. NAT64: if Fly reaches the IPv4 internet via NAT64 (64:ff9b::/96), outbound
+#      v4 rides inside IPv6 and the `ip daddr` rules below never match it. In that
+#      case the internal v4 ranges must be re-expressed as their 64:ff9b::
+#      embeddings (e.g. 64:ff9b::a9fe:a9fe for the metadata IP). Left out here
+#      because blocking 64:ff9b::/96 wholesale would also kill public IPv4.
+
+flush ruleset
+
+table inet egress {
+    chain output {
+        type filter hook output priority 0; policy accept;
+
+        # The app talks to its launched browser's CDP endpoint on 127.0.0.1;
+        # never block loopback.
+        oifname "lo" accept
+
+        # Return traffic for connections already allowed out.
+        ct state established,related accept
+
+        # DNS must resolve. Allowing port 53 is safe: a DNS-rebinding answer that
+        # points a public name at an internal IP is still blocked at connect time
+        # by the destination rules below.
+        udp dport 53 accept
+        tcp dport 53 accept
+
+        # IPv4: unspecified, private (RFC1918), CGNAT, loopback, link-local
+        # (incl. cloud metadata 169.254.169.254), multicast, reserved.
+        ip daddr {
+            0.0.0.0/8,
+            10.0.0.0/8,
+            100.64.0.0/10,
+            127.0.0.0/8,
+            169.254.0.0/16,
+            172.16.0.0/12,
+            192.168.0.0/16,
+            224.0.0.0/4,
+            240.0.0.0/4
+        } drop
+
+        # IPv6: loopback, unspecified, ULA (fc00::/7 covers Fly's fdaa::/8 6PN),
+        # link-local, multicast.
+        ip6 daddr {
+            ::1/128,
+            ::/128,
+            fc00::/7,
+            fe80::/10,
+            ff00::/8
+        } drop
+    }
+}

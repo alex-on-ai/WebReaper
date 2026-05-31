@@ -33,8 +33,9 @@ public static class CdpPageLoaderBuilderExtensions
 
     /// <summary>Launch-and-connect: the transport spawns Chromium via
     /// <see cref="CdpLaunchHelpers"/> with the supplied
-    /// <paramref name="options"/>, then connects. Lifecycle owned by the
-    /// transport — Dispose tears down the spawned process.</summary>
+    /// <paramref name="options"/>, then connects. The transport is registered
+    /// for engine teardown (ADR-0058), so disposing the engine kills the
+    /// spawned process.</summary>
     public static ScraperEngineBuilder WithCdpPageLoader(this ScraperEngineBuilder builder, CdpLaunchOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -78,6 +79,19 @@ public static class CdpPageLoaderBuilderExtensions
         }
 
         return builder.WithLoadTransport((cookies, proxy, logger, actionResolver) =>
-            new CdpPageLoadTransport(ProvideAsync, DisposeAsync, cookies, proxy, logger, actionResolver));
+        {
+            var transport = new CdpPageLoadTransport(ProvideAsync, DisposeAsync, cookies, proxy, logger, actionResolver);
+            // ADR-0058: register the transport for engine teardown. The engine
+            // does not dispose page-load transports itself (EscalatingPageLoader
+            // is not IAsyncDisposable), so without this the lazily-spawned browser
+            // process leaks on a long-running host (OS-reaped only on host exit,
+            // the same gap WithCloakBrowser already closed for its subprocess).
+            // This factory runs during BuildAsync, before the engine reads the
+            // teardown-hook list, so the hook lands; disposal is idempotent and a
+            // no-op when the browser was never launched (an HTTP-only scrape that
+            // never reached the Dynamic rung).
+            builder.OnTeardown(transport);
+            return transport;
+        });
     }
 }

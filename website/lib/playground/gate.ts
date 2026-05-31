@@ -155,28 +155,153 @@ export async function checkRateLimits(ip: string): Promise<GateVerdict> {
   return { ok: true };
 }
 
-async function incrWithExpire(
+type RedisResult = { result?: unknown; error?: string };
+
+// Run a pipeline of Redis commands atomically via the Upstash REST /multi-exec
+// endpoint. Throws on a transport / HTTP error; callers treat that as fail-open.
+async function redisMultiExec(
   baseUrl: string,
   token: string,
-  key: string,
-  ttlSec: number,
-): Promise<number> {
+  commands: string[][],
+): Promise<RedisResult[]> {
   const res = await fetch(`${baseUrl}/multi-exec`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${token}`,
       "content-type": "application/json",
     },
-    body: JSON.stringify([
-      ["INCR", key],
-      ["EXPIRE", key, String(ttlSec)],
-    ]),
+    body: JSON.stringify(commands),
   });
   if (!res.ok) throw new Error(`Upstash HTTP ${res.status}`);
-  const results = (await res.json()) as Array<{ result?: number; error?: string }>;
-  const incr = results[0];
-  if (!incr || typeof incr.result !== "number") {
-    throw new Error(incr?.error ?? "unexpected INCR result");
+  return (await res.json()) as RedisResult[];
+}
+
+function firstCount(results: RedisResult[], op: string): number {
+  const r = results[0];
+  if (!r || typeof r.result !== "number") {
+    throw new Error(typeof r?.error === "string" ? r.error : `unexpected ${op} result`);
   }
-  return incr.result;
+  return r.result;
+}
+
+async function incrWithExpire(
+  baseUrl: string,
+  token: string,
+  key: string,
+  ttlSec: number,
+): Promise<number> {
+  const results = await redisMultiExec(baseUrl, token, [
+    ["INCR", key],
+    ["EXPIRE", key, String(ttlSec)],
+  ]);
+  return firstCount(results, "INCR");
+}
+
+async function incrByWithExpire(
+  baseUrl: string,
+  token: string,
+  key: string,
+  amount: number,
+  ttlSec: number,
+): Promise<number> {
+  const results = await redisMultiExec(baseUrl, token, [
+    ["INCRBY", key, String(amount)],
+    ["EXPIRE", key, String(ttlSec)],
+  ]);
+  return firstCount(results, "INCRBY");
+}
+
+/**
+ * Light pre-check shared by both tiers: reject obvious junk and non-http(s)
+ * schemes before opening an upstream connection. The backend's SSRF-guarded
+ * handler (and, for Tier B, the in-VM egress firewall) are the authoritative
+ * address policy.
+ */
+export function safeHttpUrl(raw: string | null): URL | null {
+  if (!raw) return null;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+  return url.protocol === "http:" || url.protocol === "https:" ? url : null;
+}
+
+// Pragmatic email shape check for the gate: one @, a dot in the domain, no
+// whitespace. Not RFC-perfect; it only has to reject junk.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Tier B email-capture gate (the 2026-05-30 decision: the live climb is gated by
+ * an email that feeds the Stripe-ready waitlist). Validates the address and
+ * records it best-effort to the lead store, then allows. A missing or malformed
+ * email is the only block; a store outage never blocks, since the lead is already
+ * in hand.
+ */
+export async function captureEmail(email: string | null, ip: string): Promise<GateVerdict> {
+  const value = email?.trim().toLowerCase() ?? "";
+  if (!value || value.length > 254 || !EMAIL_RE.test(value)) {
+    return { ok: false, reason: "Enter your email to run the full browser climb." };
+  }
+  await recordLead(value, ip);
+  return { ok: true };
+}
+
+// Best-effort lead capture into a deduplicated Upstash set. Unconfigured => log
+// the lead so it is recoverable (a missing store must not silently drop the
+// funnel, matching lib/billing.ts's waitlist behaviour). Never throws.
+async function recordLead(email: string, ip: string): Promise<void> {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) {
+    console.warn(
+      `[playground] lead captured but Upstash is unset, so it was NOT stored. ` +
+        `Recover from this log: email=${email} ip=${ip}.`,
+    );
+    return;
+  }
+  try {
+    await redisMultiExec(url, token, [["SADD", "pg:playground:leads", email]]);
+  } catch (err) {
+    console.error("[playground] lead store error (the run is still allowed):", err);
+  }
+}
+
+// The per-job browser-time ceiling the backend enforces (its ~45s kill). The
+// budget meters every Tier B run at this worst case.
+const TIERB_JOB_SECONDS = 45;
+
+/**
+ * Tier B daily browser-time budget kill switch (the cost ceiling, decision 6).
+ * Meters each run at its 45s worst case into a daily counter; once it passes
+ * PLAYGROUND_TIERB_DAILY_BROWSER_SECONDS (default 3 browser-hours) the playground
+ * shows "at capacity, sign up" instead of spending another browser Machine.
+ * Unconfigured / store outage => allow: a cost ceiling must not take the demo
+ * down on a Redis blip, and the backend's own per-job kill plus Fly scale-to-zero
+ * are the harder cost guards.
+ */
+export async function checkTierBBudget(): Promise<GateVerdict> {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) {
+    console.warn("[playground] Upstash not configured; Tier B budget disabled (dev mode).");
+    return { ok: true };
+  }
+
+  const cap = intEnv("PLAYGROUND_TIERB_DAILY_BROWSER_SECONDS", 10_800);
+  const day = Math.floor(Date.now() / 86_400_000);
+  try {
+    const spent = await incrByWithExpire(url, token, `pg:tierb:secs:d:${day}`, TIERB_JOB_SECONDS, 86_400);
+    if (spent > cap) {
+      return {
+        ok: false,
+        reason: "The live browser demo is at capacity for today. Sign up for Cloud to keep going.",
+      };
+    }
+  } catch (err) {
+    console.error("[playground] Tier B budget store error:", err);
+    return { ok: true };
+  }
+  return { ok: true };
 }

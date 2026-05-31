@@ -2,6 +2,7 @@ import {
   SSE_HEADERS,
   checkRateLimits,
   clientIp,
+  safeHttpUrl,
   sseError,
   verifyTurnstile,
 } from "@/lib/playground/gate";
@@ -61,18 +62,4 @@ export async function GET(req: Request): Promise<Response> {
 function backendHeaders(): HeadersInit {
   const secret = process.env.PLAYGROUND_BACKEND_SECRET;
   return secret ? { "x-playground-secret": secret } : {};
-}
-
-// Light pre-check only; the backend's SSRF-guarded handler is the authoritative
-// address policy (DNS-pinned, redirect re-validated). This just rejects obvious
-// junk and non-http schemes before opening an upstream connection.
-function safeHttpUrl(raw: string | null): URL | null {
-  if (!raw) return null;
-  let url: URL;
-  try {
-    url = new URL(raw);
-  } catch {
-    return null;
-  }
-  return url.protocol === "http:" || url.protocol === "https:" ? url : null;
 }

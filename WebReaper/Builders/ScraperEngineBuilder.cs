@@ -697,6 +697,11 @@ public class ScraperEngineBuilder
         return this;
     }
 
+    // Test seam (mirrors the other *ForTests internals): the number of registered
+    // ADR-0058 teardown hooks, so a test can assert a satellite or transport
+    // registered itself for engine disposal without launching a real subprocess.
+    internal int TeardownHookCountForTests => _teardownHooks.Count;
+
     /// <summary>Rotate over proxies from <paramref name="source"/>, keeping
     /// only those every <paramref name="validators"/> approves.</summary>
     public ScraperEngineBuilder WithValidatedProxies(

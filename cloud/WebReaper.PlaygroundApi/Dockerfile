@@ -1,7 +1,7 @@
 # Tier A playground backend (Phase 1). The API references the WebReaper library
 # project (..\..\WebReaper), so the Docker build CONTEXT must be the REPO ROOT,
-# not this directory. fly.toml sets [build].dockerfile to this path; Fly's
-# context is always the project root, so deploy FROM the repo root:
+# not this directory. The build context is the working directory you run
+# `fly deploy` from, so deploy FROM the repo root:
 #
 #   fly deploy --config cloud/WebReaper.PlaygroundApi/fly.toml
 #

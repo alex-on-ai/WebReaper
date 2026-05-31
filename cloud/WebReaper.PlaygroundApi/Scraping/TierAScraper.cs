@@ -67,7 +67,7 @@ public sealed class TierAScraper
                 events.Add(ClimbEvents.Blocked("http", status, $"Server returned {status}."));
                 events.Add(ClimbEvents.Exhausted(
                     "http",
-                    "This site challenges plain HTTP. The browser and stealth tiers are gated, sign in to run the full climb."));
+                    $"This site challenges plain HTTP. Run the full browser and stealth climb locally and free with the CLI: webreaper scrape --stealth {uri}"));
                 return events;
             }
 

@@ -1,7 +1,10 @@
 # Fly config for the Tier A playground backend (Phase 1).
 #
-# Deploy from the REPO ROOT so the build context includes the WebReaper library
-# (Fly's context is always the project root; see the Dockerfile header):
+# Deploy from the REPO ROOT: the working directory you run `fly deploy` from is
+# the Docker build context, and it must be the repo root because the Dockerfile
+# COPYs the WebReaper library from there. `--config` resolves relative to that
+# working directory; `[build].dockerfile` (below) resolves relative to THIS
+# file's directory. See the Dockerfile header:
 #
 #   fly launch --no-deploy --config cloud/WebReaper.PlaygroundApi/fly.toml   # first time, sets app + region
 #   fly secrets set PLAYGROUND_BACKEND_SECRET=$(openssl rand -hex 32) --config cloud/WebReaper.PlaygroundApi/fly.toml
@@ -14,8 +17,10 @@ app = "webreaper-playground"
 primary_region = "iad"
 
 [build]
-  # Relative to the repo root (Fly's build context), not to this file.
-  dockerfile = "cloud/WebReaper.PlaygroundApi/Dockerfile"
+  # Resolved relative to THIS fly.toml's directory (not the build context), so it
+  # is just the local filename. The build context stays the repo root you deploy
+  # from, where the Dockerfile's COPY paths resolve.
+  dockerfile = "Dockerfile"
 
 [http_service]
   internal_port = 8080

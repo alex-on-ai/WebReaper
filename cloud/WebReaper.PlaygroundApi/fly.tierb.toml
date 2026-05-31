@@ -17,17 +17,23 @@ app = "webreaper-playground-tierb"
 primary_region = "iad"
 
 [build]
-  # Resolved relative to THIS file's directory (not the build context): the
-  # browser-baked image. The build context stays the repo root you deploy from.
-  dockerfile = "Dockerfile.tierb"
+  # Resolved relative to THIS file's directory (not the build context): the LEAN
+  # public image (HTTP + headed vanilla Chromium, no CloakBrowser stealth rung).
+  # The stealth-capable Dockerfile.tierb stays in-tree for a future dedicated
+  # stealth / real-GPU app; the public path runs lean so a hard-CF target cannot
+  # climb to the ~37s stealth rung and exceed the playground edge's 60s
+  # maxDuration. The build context stays the repo root you deploy from.
+  dockerfile = "Dockerfile.tierb.lean"
 
 [http_service]
   internal_port = 8080
   force_https = true
-  # Scale to zero between demos; the climb animation masks the cold boot.
+  # Keep one Machine warm so the first climb skips the ~9s VM cold-boot (the live
+  # climb must fit the playground edge's 60s maxDuration). Extra Machines still
+  # auto-stop between demos; auto_start brings them back under load.
   auto_stop_machines = "stop"
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
 
   # One hostile browser job per Machine (decision 3). soft_limit routes the 2nd
   # concurrent request to a 2nd Machine (auto-start) instead of sharing the VM;
@@ -46,8 +52,8 @@ primary_region = "iad"
     grace_period = "10s"
 
 [[vm]]
-  # ~2 GB for headless Chromium + the CloakBrowser fork (decision 5); 2 shared
-  # vCPUs since browser rendering is CPU-bound.
+  # ~2 GB for a headed vanilla Chromium under Xvfb (decision 5); 2 shared vCPUs
+  # since browser rendering is CPU-bound.
   size = "shared-cpu-2x"
   memory = "2048mb"
 

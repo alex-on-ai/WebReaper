@@ -22,9 +22,9 @@ public sealed class CloakBrowserOptions
     /// from upstream if missing, log a license-acknowledgment line.</summary>
     public AutoInstallPolicy AutoInstall { get; set; } = AutoInstallPolicy.PromptLogger;
 
-    /// <summary>Pin a specific CloakBrowser version (e.g. <c>"0.3.30"</c>).
-    /// When <c>null</c>, the installer uses the latest known-good version
-    /// (currently <c>0.3.30</c>).</summary>
+    /// <summary>Pin a specific CloakBrowser release tag (e.g.
+    /// <c>"chromium-v146.0.7680.177.5"</c>). When <c>null</c>, the installer uses
+    /// <see cref="CloakBrowserInstaller.DefaultVersion"/>.</summary>
     public string? Version { get; set; }
 
     /// <summary>Optional pre-installed binary path. When set, the satellite

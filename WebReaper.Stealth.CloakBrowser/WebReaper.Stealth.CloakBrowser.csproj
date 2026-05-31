@@ -34,4 +34,9 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- The SHA256SUMS parser is internal; the integration test project binds to it. -->
+    <InternalsVisibleTo Include="WebReaper.IntegrationTests" />
+  </ItemGroup>
 </Project>

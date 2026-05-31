@@ -1,3 +1,7 @@
+using System.Formats.Tar;
+using System.IO.Compression;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using WebReaper.Cdp;
 
@@ -11,19 +15,24 @@ namespace WebReaper.Stealth.CloakBrowser;
 /// rehosted.
 /// </summary>
 /// <remarks>
-/// v1 ships the detection + download mechanics. Checksum verification is a
-/// TODO (the release-manifest API exposes it; needs a follow-up to read
-/// and verify). Resumable download is also a TODO; v1 retries from scratch
-/// on partial-file failure.
+/// The download resolves a real GitHub release asset, verifies it against the
+/// release's published <c>SHA256SUMS</c>, and extracts it with BCL APIs (no
+/// external <c>tar</c>). Resumable download is still a TODO; a partial-file
+/// failure retries from scratch. Only the platforms CloakBrowser actually ships
+/// (<c>linux-x64</c>, <c>windows-x64</c>) can auto-download; other RIDs must
+/// supply <see cref="CloakBrowserOptions.ExecutablePath"/>.
 /// </remarks>
 public static class CloakBrowserInstaller
 {
-    /// <summary>The version v1 of this satellite installs unless the
-    /// consumer overrides via <see cref="CloakBrowserOptions.Version"/>.</summary>
-    public const string DefaultVersion = "0.3.30";
+    /// <summary>The release tag this satellite installs unless the consumer
+    /// overrides via <see cref="CloakBrowserOptions.Version"/>. CloakBrowser tags
+    /// its stealth builds <c>chromium-vN</c>.</summary>
+    public const string DefaultVersion = "chromium-v146.0.7680.177.5";
 
     /// <summary>The license URL surfaced on first install.</summary>
     public const string LicenseUrl = "https://github.com/CloakHQ/CloakBrowser/blob/main/BINARY-LICENSE.md";
+
+    private const string ReleasesBase = "https://github.com/CloakHQ/CloakBrowser/releases/download";
 
     /// <summary>Idempotent: returns the path to a usable CloakBrowser
     /// executable for the current RID. Detects an existing install
@@ -45,9 +54,14 @@ public static class CloakBrowserInstaller
             return options.ExecutablePath;
         }
 
+        // Resolve the upstream asset for this platform first, so an unsupported
+        // RID (macOS, linux-arm64, win-x86, none of which CloakBrowser ships)
+        // fails fast with an actionable message instead of a 404 mid-download.
+        var asset = ResolveAsset();
+
         var version = options.Version ?? DefaultVersion;
         var cacheDir = Path.Combine(GetWebReaperHome(), "stealth", "cloakbrowser", version);
-        var cachedBinary = ExpectedBinaryPath(cacheDir);
+        var cachedBinary = Path.Combine(cacheDir, asset.ExeName);
         if (File.Exists(cachedBinary)) return cachedBinary;
 
         // Try PATH detection — some users may have CloakBrowser installed
@@ -62,47 +76,28 @@ public static class CloakBrowserInstaller
         if (options.AutoInstall == AutoInstallPolicy.Disabled)
         {
             throw new InvalidOperationException(
-                $"CloakBrowser binary not found and AutoInstall is Disabled. " +
-                $"Either install CloakBrowser yourself and place the binary on PATH, " +
-                $"or set CloakBrowserOptions.ExecutablePath, or change AutoInstall to PromptLogger / NoPromptYes.");
+                "CloakBrowser binary not found and AutoInstall is Disabled. " +
+                "Either install CloakBrowser yourself and place the binary on PATH, " +
+                "or set CloakBrowserOptions.ExecutablePath, or change AutoInstall to PromptLogger / NoPromptYes.");
         }
 
         if (options.AutoInstall == AutoInstallPolicy.PromptLogger)
         {
             logger.LogWarning(
-                "CloakBrowser: downloading binary v{Version} from upstream (~220 MB). " +
+                "CloakBrowser: downloading binary {Version} from upstream (~220 MB). " +
                 "By using CloakBrowser you accept its binary license: {LicenseUrl}",
                 version, LicenseUrl);
         }
 
         Directory.CreateDirectory(cacheDir);
-        await DownloadAndExtractAsync(version, cacheDir, logger, ct);
+        await DownloadAndExtractAsync(version, asset, cacheDir, logger, ct);
 
         if (!File.Exists(cachedBinary))
             throw new InvalidOperationException(
                 $"CloakBrowser install completed but expected binary not found at {cachedBinary}.");
 
-        // On Unix, mark executable.
         if (!OperatingSystem.IsWindows())
-        {
-            try
-            {
-                var fi = new FileInfo(cachedBinary);
-                // chmod +x via P/Invoke would be cleanest; for simplicity
-                // shell out to chmod. Cheap on the install hot path.
-                var psi = new System.Diagnostics.ProcessStartInfo("chmod", $"+x \"{cachedBinary}\"")
-                {
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                };
-                using var p = System.Diagnostics.Process.Start(psi);
-                await (p?.WaitForExitAsync(ct) ?? Task.CompletedTask);
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "CloakBrowser: failed to chmod +x {Path}; you may need to do it manually.", cachedBinary);
-            }
-        }
+            EnsureExecutable(cachedBinary);
 
         return cachedBinary;
     }
@@ -122,64 +117,109 @@ public static class CloakBrowserInstaller
         return Path.Combine(home, ".webreaper");
     }
 
-    private static string ExpectedBinaryPath(string cacheDir)
+    // The release asset for the current platform. CloakBrowser publishes only
+    // linux-x64 (tar.gz) and windows-x64 (zip); both unpack flat, with the
+    // executable named `chrome` / `chrome.exe` (a Chromium fork). The Linux asset
+    // is verified; the Windows exe name mirrors it.
+    private readonly record struct Asset(string FileName, ArchiveKind Kind, string ExeName);
+
+    private enum ArchiveKind { TarGz, Zip }
+
+    private static Asset ResolveAsset()
     {
-        // CloakBrowser's release archives unpack to a folder containing the
-        // executable. Convention used by v1: the exe is at the root of the
-        // cache dir, named `cloakbrowser` (or `cloakbrowser.exe` on Windows).
-        // Future versions may need a per-version layout lookup.
-        var name = OperatingSystem.IsWindows() ? "cloakbrowser.exe" : "cloakbrowser";
-        return Path.Combine(cacheDir, name);
+        var arch = RuntimeInformation.OSArchitecture;
+        if (OperatingSystem.IsLinux() && arch == Architecture.X64)
+            return new Asset("cloakbrowser-linux-x64.tar.gz", ArchiveKind.TarGz, "chrome");
+        if (OperatingSystem.IsWindows() && arch == Architecture.X64)
+            return new Asset("cloakbrowser-windows-x64.zip", ArchiveKind.Zip, "chrome.exe");
+
+        throw new PlatformNotSupportedException(
+            $"CloakBrowser publishes only linux-x64 and windows-x64 binaries; the current platform " +
+            $"({(OperatingSystem.IsMacOS() ? "macOS" : RuntimeInformation.OSDescription)} / {arch}) has no upstream build. " +
+            "Set CloakBrowserOptions.ExecutablePath to a binary you supply, or run on linux-x64 / windows-x64.");
     }
 
-    private static async Task DownloadAndExtractAsync(string version, string cacheDir, ILogger logger, CancellationToken ct)
+    private static async Task DownloadAndExtractAsync(
+        string version, Asset asset, string cacheDir, ILogger logger, CancellationToken ct)
     {
-        var rid = GetRid();
-        // v1: URL pattern based on the upstream's GitHub releases convention.
-        // Real version of this code reads /releases/{tag} for the exact asset name + checksum.
-        var assetName = $"cloakbrowser-{rid}.tar.gz";
-        var url = $"https://github.com/CloakHQ/CloakBrowser/releases/download/v{version}/{assetName}";
-        var archivePath = Path.Combine(cacheDir, assetName);
+        var assetUrl = $"{ReleasesBase}/{version}/{asset.FileName}";
+        var sumsUrl = $"{ReleasesBase}/{version}/SHA256SUMS";
+        var archivePath = Path.Combine(cacheDir, asset.FileName);
 
-        logger.LogInformation("CloakBrowser: downloading {Url}", url);
-        using (var http = new HttpClient { Timeout = TimeSpan.FromMinutes(15) })
-        using (var resp = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct))
+        using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(15) };
+
+        logger.LogInformation("CloakBrowser: downloading {Url}", assetUrl);
+        using (var resp = await http.GetAsync(assetUrl, HttpCompletionOption.ResponseHeadersRead, ct))
         {
             resp.EnsureSuccessStatusCode();
             await using var fs = File.Create(archivePath);
             await resp.Content.CopyToAsync(fs, ct);
         }
 
-        logger.LogInformation("CloakBrowser: extracting {Archive}", archivePath);
-        // v1: relies on `tar` being on PATH. On Windows 10+, tar.exe ships in-box.
-        var psi = new System.Diagnostics.ProcessStartInfo("tar", $"-xzf \"{archivePath}\" -C \"{cacheDir}\"")
+        // Verify against the release's published SHA256SUMS before extracting, so
+        // a corrupt or tampered download never reaches the launch path.
+        var sums = await http.GetStringAsync(sumsUrl, ct);
+        var expected = ParseExpectedSha(sums, asset.FileName)
+            ?? throw new InvalidOperationException(
+                $"CloakBrowser: SHA256SUMS at {sumsUrl} has no entry for {asset.FileName}.");
+        var actual = await ComputeSha256Async(archivePath, ct);
+        if (!string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase))
         {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardError = true,
-        };
-        using var p = System.Diagnostics.Process.Start(psi)
-            ?? throw new InvalidOperationException("Failed to start `tar` — is it on PATH?");
-        await p.WaitForExitAsync(ct);
-        if (p.ExitCode != 0)
-        {
-            var stderr = await p.StandardError.ReadToEndAsync(ct);
-            throw new InvalidOperationException($"tar extract failed: {stderr.Trim()}");
+            TryDelete(archivePath);
+            throw new InvalidOperationException(
+                $"CloakBrowser download checksum mismatch for {asset.FileName}: expected {expected}, got {actual}. " +
+                "The download may be corrupt or tampered with; it was not extracted.");
         }
+        logger.LogInformation("CloakBrowser: SHA256 verified ({Asset}); extracting.", asset.FileName);
 
-        try { File.Delete(archivePath); } catch { /* best-effort */ }
+        await ExtractAsync(archivePath, cacheDir, asset.Kind, ct);
+        TryDelete(archivePath);
     }
 
-    private static string GetRid()
+    // SHA256SUMS lines are "<hex>  <filename>". Returns the hex for assetName, or
+    // null if absent. Internal for unit testing without a network round-trip.
+    internal static string? ParseExpectedSha(string sumsContent, string assetName)
     {
-        if (OperatingSystem.IsWindows())
-            return Environment.Is64BitProcess ? "win-x64" : "win-x86";
-        if (OperatingSystem.IsMacOS())
-            return System.Runtime.InteropServices.RuntimeInformation.OSArchitecture
-                == System.Runtime.InteropServices.Architecture.Arm64 ? "osx-arm64" : "osx-x64";
-        if (OperatingSystem.IsLinux())
-            return System.Runtime.InteropServices.RuntimeInformation.OSArchitecture
-                == System.Runtime.InteropServices.Architecture.Arm64 ? "linux-arm64" : "linux-x64";
-        throw new PlatformNotSupportedException("Unsupported platform for CloakBrowser.");
+        foreach (var line in sumsContent.Split('\n'))
+        {
+            var parts = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 2 && string.Equals(parts[^1], assetName, StringComparison.Ordinal))
+                return parts[0];
+        }
+        return null;
+    }
+
+    private static async Task<string> ComputeSha256Async(string path, CancellationToken ct)
+    {
+        await using var fs = File.OpenRead(path);
+        var hash = await SHA256.HashDataAsync(fs, ct);
+        return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    private static async Task ExtractAsync(string archivePath, string destDir, ArchiveKind kind, CancellationToken ct)
+    {
+        if (kind == ArchiveKind.Zip)
+        {
+            ZipFile.ExtractToDirectory(archivePath, destDir, overwriteFiles: true);
+            return;
+        }
+
+        await using var file = File.OpenRead(archivePath);
+        await using var gz = new GZipStream(file, CompressionMode.Decompress);
+        // TarFile preserves the entries' Unix permission bits, so the extracted
+        // `chrome` keeps its executable mode.
+        await TarFile.ExtractToDirectoryAsync(gz, destDir, overwriteFiles: true, ct);
+    }
+
+    private static void EnsureExecutable(string path)
+    {
+        var mode = File.GetUnixFileMode(path);
+        File.SetUnixFileMode(path,
+            mode | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
+    }
+
+    private static void TryDelete(string path)
+    {
+        try { File.Delete(path); } catch { /* best-effort */ }
     }
 }

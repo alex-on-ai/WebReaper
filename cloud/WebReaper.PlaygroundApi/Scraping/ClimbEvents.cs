@@ -15,6 +15,12 @@ public static class ClimbEvents
     public static object Blocked(string tier, int? status, string reason)
         => new { kind = "blocked", tier, status, reason };
 
+    /// <summary>
+    /// The climb from one rung to the next. Tier A never climbs, so only Tier B
+    /// emits this; <c>from</c> / <c>to</c> are tier names, not indices.
+    /// </summary>
+    public static object Escalate(string from, string to) => new { kind = "escalate", from, to };
+
     public static object Success(string tier, int status) => new { kind = "success", tier, status };
 
     public static object Result(string title, string markdown)

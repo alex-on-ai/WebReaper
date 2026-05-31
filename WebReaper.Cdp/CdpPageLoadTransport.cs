@@ -121,17 +121,24 @@ public sealed class CdpPageLoadTransport : IPageLoadTransport, IAsyncDisposable
             // — we swallow per-cookie failures via a try/catch on the batch).
             await ApplyCookiesAsync(browser, sessionId, request.Url, cancellationToken);
 
-            // Navigate. Wait for the load event with a generous timeout.
+            // Navigate, then wait for the page's load event. The cap is a
+            // capture deadline, not a target: `Page.loadEventFired` only fires
+            // once every sub-resource (ads, trackers, fonts) settles, which on a
+            // heavy real-world page runs well past when the DOM — all we extract —
+            // is ready. So we cap the wait modestly and capture the current DOM on
+            // timeout; a JS-challenge page that is still verifying is caught by the
+            // interstitial poll below, not here. (Measured: dropping this from 30s
+            // shaves the bulk off heavy pages whose load event never settles.)
             await browser.SendAsync("Page.navigate",
                 new JsonObject { ["url"] = request.Url }, sessionId, cancellationToken);
             try
             {
                 await browser.WaitForEventAsync("Page.loadEventFired",
-                    sessionId, TimeSpan.FromSeconds(30), cancellationToken);
+                    sessionId, TimeSpan.FromSeconds(12), cancellationToken);
             }
             catch (TimeoutException)
             {
-                _logger.LogWarning("CdpPageLoadTransport: Page.loadEventFired timed out for {Url}; continuing with current DOM.", request.Url);
+                _logger.LogWarning("CdpPageLoadTransport: Page.loadEventFired did not settle within 12s for {Url}; capturing the current DOM.", request.Url);
             }
 
             // Small settle delay — analogous to Puppeteer's Networkidle2 wait.
@@ -156,13 +163,16 @@ public sealed class CdpPageLoadTransport : IPageLoadTransport, IAsyncDisposable
             // until it clears (a stealth browser that passes the check yields the
             // real DOM) or a cap elapses (a browser that cannot pass stays on the
             // interstitial, which the block detector then flags). Real pages capture
-            // immediately: the marker check fails on the first read.
+            // immediately: the marker check fails on the first read. The cap is 8s:
+            // a challenge that clears does so in the first few seconds; one that has
+            // not cleared by 8s is a block (honest-loss), so polling longer only
+            // delays the climb to the next rung and the final blocked verdict.
             var html = await CdpPageActionDispatcher.EvaluateAsync(browser, sessionId,
                 "document.documentElement.outerHTML", cancellationToken);
-            var interstitialDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
+            var interstitialDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(8);
             while (LooksLikeInterstitial(html) && DateTime.UtcNow < interstitialDeadline)
             {
-                await Task.Delay(1500, cancellationToken);
+                await Task.Delay(1000, cancellationToken);
                 html = await CdpPageActionDispatcher.EvaluateAsync(browser, sessionId,
                     "document.documentElement.outerHTML", cancellationToken);
             }

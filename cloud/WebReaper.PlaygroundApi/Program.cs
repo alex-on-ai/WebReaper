@@ -54,8 +54,18 @@ var residentialProxy = Environment.GetEnvironmentVariable("PLAYGROUND_RESIDENTIA
 // Xvfb + sets DISPLAY when this is set; unset = headless (local dev / CLI).
 var headed = Environment.GetEnvironmentVariable("PLAYGROUND_HEADED") is "1" or "true";
 
+// CloakBrowser stealth fingerprint profile (replicates the vendor wrapper's
+// build_args). Platform defaults to "windows" (the common desktop profile the
+// wrapper forces on Linux). Set PLAYGROUND_CLOAK_TIMEZONE (IANA, e.g.
+// America/New_York) + PLAYGROUND_CLOAK_LOCALE (e.g. en-US) to match the residential
+// proxy's exit country; the vendor's geoip=True derives these from the exit IP,
+// which we cannot, so they are explicit. Unset = the container default (UTC/en-US).
+var cloakFingerprintPlatform = Environment.GetEnvironmentVariable("PLAYGROUND_CLOAK_FINGERPRINT_PLATFORM") ?? "windows";
+var cloakTimezone = Environment.GetEnvironmentVariable("PLAYGROUND_CLOAK_TIMEZONE");
+var cloakLocale = Environment.GetEnvironmentVariable("PLAYGROUND_CLOAK_LOCALE");
+
 builder.Services.AddSingleton<TierAScraper>();
-builder.Services.AddSingleton(new TierBScraper(chromiumPath, cloakBrowserPath, jobSeconds, residentialProxy, headed));
+builder.Services.AddSingleton(new TierBScraper(chromiumPath, cloakBrowserPath, jobSeconds, residentialProxy, headed, cloakFingerprintPlatform, cloakTimezone, cloakLocale));
 
 var app = builder.Build();
 app.UseCors();

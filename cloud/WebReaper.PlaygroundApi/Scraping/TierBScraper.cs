@@ -54,6 +54,17 @@ public sealed class TierBScraper
     // Run the browser rungs headed (no --headless) under a virtual display (the
     // image's Xvfb provides DISPLAY). CloakBrowser's recipe for the hardest sites.
     private readonly bool _headed;
+    // CloakBrowser fingerprint profile for the stealth rung (replicates the vendor
+    // python wrapper's build_args on Linux). The wrapper presents Linux sessions as
+    // Windows desktops ("windows" -- the commonest fingerprint, harder to cluster);
+    // "macos"/"linux" are the other values. Timezone/locale align the fingerprint to
+    // the proxy's exit geo -- the vendor's geoip=True derives these from the exit IP,
+    // which we cannot do here, so they are opt-in config (a residential proxy in a
+    // different geo than the container's UTC/en-US default is itself a weak signal
+    // without them).
+    private readonly string _fingerprintPlatform;
+    private readonly string? _fingerprintTimezone;
+    private readonly string? _fingerprintLocale;
 
     /// <param name="chromiumPath">Absolute path to the baked Chromium binary (the
     /// Docker image's Playwright Chromium). <c>null</c> lets the CDP launcher
@@ -70,13 +81,25 @@ public sealed class TierBScraper
     /// <param name="headed">Run the browser rungs headed (no <c>--headless</c>) under
     /// a virtual display (the image's Xvfb). CloakBrowser's recipe for the hardest
     /// bot-checks; <c>false</c> = headless (local dev / CLI).</param>
-    public TierBScraper(string? chromiumPath = null, string? cloakBrowserPath = null, int jobSeconds = 45, string? residentialProxy = null, bool headed = false)
+    /// <param name="fingerprintPlatform">CloakBrowser <c>--fingerprint-platform</c>
+    /// value for the stealth rung (default <c>"windows"</c>, the common desktop
+    /// profile the vendor wrapper forces on Linux).</param>
+    /// <param name="fingerprintTimezone">Optional IANA timezone (e.g.
+    /// <c>America/New_York</c>) aligning the stealth fingerprint to the proxy's exit
+    /// geo; <c>null</c> = the container default (UTC).</param>
+    /// <param name="fingerprintLocale">Optional locale (e.g. <c>en-US</c>) aligning the
+    /// stealth fingerprint to the proxy's exit geo; <c>null</c> = the container
+    /// default (en-US).</param>
+    public TierBScraper(string? chromiumPath = null, string? cloakBrowserPath = null, int jobSeconds = 45, string? residentialProxy = null, bool headed = false, string fingerprintPlatform = "windows", string? fingerprintTimezone = null, string? fingerprintLocale = null)
     {
         _chromiumPath = chromiumPath;
         _cloakBrowserPath = cloakBrowserPath;
         _runTimeout = TimeSpan.FromSeconds(jobSeconds > 0 ? jobSeconds : 45);
         (_proxyServerArg, _proxyProvider) = ParseProxy(residentialProxy);
         _headed = headed;
+        _fingerprintPlatform = string.IsNullOrWhiteSpace(fingerprintPlatform) ? "windows" : fingerprintPlatform;
+        _fingerprintTimezone = string.IsNullOrWhiteSpace(fingerprintTimezone) ? null : fingerprintTimezone;
+        _fingerprintLocale = string.IsNullOrWhiteSpace(fingerprintLocale) ? null : fingerprintLocale;
     }
 
     // Split a residential proxy URL into the --proxy-server value (no creds) and an
@@ -238,19 +261,69 @@ public sealed class TierBScraper
             cancellationToken);
     }
 
-    // The stealth rung (CloakBrowser, gated on the configured binary). The vendor's
-    // RecommendedArgs are hardened-Chromium sanity flags; the stealth is in the
-    // binary. --no-sandbox is added because the container runs as root (the VM is
-    // the trust boundary, decision 5).
+    // The stealth rung (CloakBrowser, gated on the configured binary). Launches with
+    // the vendor's full stealth recipe (see BuildStealthArgs) -- the .NET launcher
+    // used to pass only RecommendedArgs sanity flags, so on a software-GL host the
+    // browser ran with no fingerprint profile and, headless, no WebGL context at all
+    // (an instant bot tell). --no-sandbox is added because the container runs as root
+    // (the VM is the trust boundary, decision 5).
     private Task<LaunchedCdpEndpoint> LaunchStealthAsync(CancellationToken cancellationToken)
     {
-        var args = new List<string>(CloakBrowserLauncher.RecommendedArgs) { "--no-sandbox" };
-        args.Add(_headed ? "--window-size=1920,1080" : "--headless=new");
-        if (_proxyServerArg is not null) args.Add($"--proxy-server={_proxyServerArg}");
+        // Per-launch fingerprint seed, matching the vendor wrapper (random 10000-99999):
+        // the binary derives GPU / hardware-concurrency / device-memory / screen from
+        // it, so a fresh seed per job is a fresh stealth identity (Tier B scrapes one
+        // URL per job, so there is no multi-page identity to keep stable).
+        var seed = Random.Shared.Next(10000, 100000);
+        var args = BuildStealthArgs(_headed, _proxyServerArg, _fingerprintPlatform, seed, _fingerprintTimezone, _fingerprintLocale);
         return CdpLaunchHelpers.LaunchAsync(
             // 60s cold-start headroom, matching the vanilla rung (see LaunchVanillaAsync).
             new CdpLaunchSpec(_cloakBrowserPath!, args, StartupTimeout: TimeSpan.FromSeconds(60)),
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Build the CloakBrowser stealth launch args, replicating the vendor python
+    /// wrapper's <c>build_args</c> recipe on Linux. The binary's source-level patches
+    /// do the stealth; these args select the right profile (the launcher previously
+    /// omitted them, leaving a bare browser):
+    /// <list type="bullet">
+    /// <item><c>--fingerprint=&lt;seed&gt;</c>: master seed the binary derives the
+    /// GPU / hardware-concurrency / device-memory / screen profile from.</item>
+    /// <item><c>--fingerprint-platform</c>: present as Windows (the common desktop
+    /// profile the wrapper forces on Linux) instead of the binary's native Linux.</item>
+    /// <item><c>--ignore-gpu-blocklist</c> (headed only): lets SwiftShader serve WebGL
+    /// under Xvfb in a GPU-less container. Without it, headed software-GL Chromium
+    /// blocks WebGL on the software GPU and the page has no WebGL context (the tell
+    /// this fix removes). Headless cannot get WebGL even with the flag, so it is gated
+    /// on headed rather than added inertly.</item>
+    /// <item><c>--fingerprint-timezone</c> / <c>--lang</c> + <c>--fingerprint-locale</c>:
+    /// align the fingerprint to the proxy's exit geo when configured.</item>
+    /// </list>
+    /// Pure (no I/O) so the recipe is unit-testable; <see cref="LaunchStealthAsync"/>
+    /// supplies the per-launch seed.
+    /// </summary>
+    public static List<string> BuildStealthArgs(bool headed, string? proxyServerArg, string fingerprintPlatform, int fingerprintSeed, string? timezone = null, string? locale = null)
+    {
+        var args = new List<string>(CloakBrowserLauncher.RecommendedArgs) { "--no-sandbox" };
+        args.Add($"--fingerprint={fingerprintSeed}");
+        args.Add($"--fingerprint-platform={fingerprintPlatform}");
+        if (headed)
+        {
+            args.Add("--window-size=1920,1080");
+            args.Add("--ignore-gpu-blocklist");
+        }
+        else
+        {
+            args.Add("--headless=new");
+        }
+        if (proxyServerArg is not null) args.Add($"--proxy-server={proxyServerArg}");
+        if (!string.IsNullOrWhiteSpace(timezone)) args.Add($"--fingerprint-timezone={timezone}");
+        if (!string.IsNullOrWhiteSpace(locale))
+        {
+            args.Add($"--lang={locale}");
+            args.Add($"--fingerprint-locale={locale}");
+        }
+        return args;
     }
 
     private static string DescribeFailure(Exception ex) => ex switch

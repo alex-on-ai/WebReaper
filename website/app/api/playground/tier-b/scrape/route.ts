@@ -1,5 +1,6 @@
 import {
   SSE_HEADERS,
+  allowedTierBTarget,
   captureEmail,
   checkRateLimits,
   checkTierBBudget,
@@ -30,6 +31,11 @@ export async function GET(req: Request): Promise<Response> {
   const params = new URL(req.url).searchParams;
   const target = safeHttpUrl(params.get("url"));
   if (!target) return sseError("Enter a valid http(s) URL to scrape.");
+
+  // Browser-tier SSRF / abuse guard (server-side, so a hand-crafted request that
+  // skips the client's target picker is still bounded to the curated demo hosts).
+  const allowed = allowedTierBTarget(target);
+  if (!allowed.ok) return sseError(allowed.reason);
 
   const ip = clientIp(req);
 

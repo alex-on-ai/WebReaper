@@ -228,6 +228,34 @@ export function safeHttpUrl(raw: string | null): URL | null {
   return url.protocol === "http:" || url.protocol === "https:" ? url : null;
 }
 
+/**
+ * Tier B target allowlist. The live browser climb issues its own OS-level
+ * requests, so until the in-VM egress firewall is enforced (cloud/README,
+ * "Egress firewall") a host allowlist is the real SSRF / abuse guard, enforced
+ * server-side so it holds even for a hand-crafted request that bypasses the
+ * client's target picker. Set PLAYGROUND_TIERB_ALLOWED_HOSTS to a comma-separated
+ * list of hostnames (a leading "." matches subdomains, e.g. ".rozetka.com.ua").
+ * Unset => allow any safeHttpUrl, with a loud warning (dev / preview only).
+ */
+export function allowedTierBTarget(url: URL): GateVerdict {
+  const raw = process.env.PLAYGROUND_TIERB_ALLOWED_HOSTS?.trim();
+  if (!raw) {
+    console.warn(
+      "[playground] PLAYGROUND_TIERB_ALLOWED_HOSTS is unset, so the Tier B climb " +
+        "accepts any public URL. Set it to the curated demo hosts before going public.",
+    );
+    return { ok: true };
+  }
+  const host = url.hostname.toLowerCase();
+  const allowed = raw.split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
+  const match = allowed.some((a) =>
+    a.startsWith(".") ? host === a.slice(1) || host.endsWith(a) : host === a,
+  );
+  return match
+    ? { ok: true }
+    : { ok: false, reason: "This demo runs only against its curated example sites." };
+}
+
 // Pragmatic email shape check for the gate: one @, a dot in the domain, no
 // whitespace. Not RFC-perfect; it only has to reject junk.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Shield } from "lucide-react";
 import { PlaygroundShowcase } from "@/components/playground/playground-showcase";
 import { LiveClimb } from "@/components/playground/live-climb";
+import { LiveClimbTierB } from "@/components/playground/live-climb-tierb";
 
 export const metadata: Metadata = {
   title: "Playground",
@@ -17,6 +18,10 @@ export default function PlaygroundPage() {
   // (localhost in dev). Enable with NEXT_PUBLIC_PLAYGROUND_LIVE=1 until the
   // backend is deployed and the edge gate is in place.
   const liveEnabled = process.env.NEXT_PUBLIC_PLAYGROUND_LIVE === "1";
+  // The Tier B browser climb is gated separately: it is metered (a real browser
+  // through a residential proxy) and email-captured. Enable with
+  // NEXT_PUBLIC_PLAYGROUND_TIERB_LIVE=1 once the Tier B Fly app + edge env are set.
+  const tierBEnabled = process.env.NEXT_PUBLIC_PLAYGROUND_TIERB_LIVE === "1";
   return (
     <div className="relative">
       <div className="glow-accent pointer-events-none absolute inset-x-0 top-0 h-72" aria-hidden />
@@ -63,6 +68,22 @@ export default function PlaygroundPage() {
               </p>
             </div>
             <LiveClimb className="mt-8" />
+          </div>
+        )}
+
+        {tierBEnabled && (
+          <div className="mt-16 border-t border-border pt-12">
+            <div className="text-center">
+              <h2 className="text-2xl font-semibold tracking-tight text-foreground">
+                Run the browser climb
+              </h2>
+              <p className="mx-auto mt-3 max-w-xl text-sm text-muted">
+                Pick a bot-protected site. WebReaper fetches it over plain HTTP, gets
+                blocked, then escalates to a real browser and returns the origin
+                content, live. Enter your email to run it.
+              </p>
+            </div>
+            <LiveClimbTierB className="mt-8" />
           </div>
         )}
       </section>

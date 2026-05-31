@@ -124,17 +124,23 @@ const PLAYGROUND_ENDPOINT = "/api/playground/scrape";
  * Drives the climb view from one of two sources, both folding into the same
  * reducer: a recorded `script` (the canned hero / demos) or a live SSE stream
  * from the gate (`liveUrl`). Exactly one is expected. `turnstileToken` is
- * forwarded to the gate as `cf` when Turnstile is configured.
+ * forwarded to the gate as `cf` when Turnstile is configured. `endpoint` selects
+ * the gate route (defaults to the Tier A scrape gate; the Tier B climb passes its
+ * own route), and `email` is forwarded as the Tier B capture-gate param.
  */
 export function ClimbDemo({
   script,
   liveUrl,
   turnstileToken,
+  email,
+  endpoint = PLAYGROUND_ENDPOINT,
   className,
 }: {
   script?: ClimbScript;
   liveUrl?: string;
   turnstileToken?: string;
+  email?: string;
+  endpoint?: string;
   className?: string;
 }) {
   const [state, dispatch] = useReducer(rootReduce, undefined, initialState);
@@ -149,7 +155,8 @@ export function ClimbDemo({
     if (liveUrl) {
       const params = new URLSearchParams({ url: liveUrl });
       if (turnstileToken) params.set("cf", turnstileToken);
-      const source = new EventSource(`${PLAYGROUND_ENDPOINT}?${params.toString()}`);
+      if (email) params.set("email", email);
+      const source = new EventSource(`${endpoint}?${params.toString()}`);
       source.onmessage = (e) => {
         let event: ClimbEvent;
         try {
@@ -180,7 +187,7 @@ export function ClimbDemo({
       return () => clearTimeout(t);
     }
     return playScript(script.events, dispatch);
-  }, [script, liveUrl, turnstileToken, runId]);
+  }, [script, liveUrl, turnstileToken, email, endpoint, runId]);
 
   const replay = () => setRunId((n) => n + 1);
 

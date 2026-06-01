@@ -27,10 +27,13 @@ type TierState = { status: TierStatus; pill?: string; reason?: string };
 type State = {
   tiers: Record<TierName, TierState>;
   climbingTo: TierName | null;
-  result: { title: string; markdown: string } | null;
+  result: { title: string; markdown: string; suspect?: boolean; suspectReason?: string } | null;
   outcome: "running" | "won" | "empty" | "lost" | "error";
   lostReason?: string;
   error?: string;
+  // True only for a live (user-typed) run. Canned recordings are authored and
+  // trusted, so the soft-block / thin "suspect" heuristic applies to live runs only.
+  live: boolean;
 };
 
 const TIER_ICON: Record<TierName, typeof Globe> = {
@@ -49,6 +52,7 @@ function initialState(): State {
     climbingTo: null,
     result: null,
     outcome: "running",
+    live: false,
   };
 }
 
@@ -87,17 +91,43 @@ function reduce(state: State, event: ClimbEvent): State {
         tiers: { ...state.tiers, [event.tier]: { status: "success", pill: `${event.status} OK` } },
       };
     case "result": {
-      // A rung returned 200 but extraction came back empty (or near-empty): a
-      // JS-only SPA shell, or a soft-block that serves a blank 200 the block
-      // detector cannot see (it reads the HTML, not the extracted Markdown).
-      // Surface it honestly as "loaded, nothing to extract" rather than a green
-      // success with a blank pane. The threshold is generous so a genuinely
-      // short page still counts as a win.
       const extracted = event.markdown.trim();
+      // Nothing came back at all: a JS-only shell or a 200 that served a blank
+      // page. The honest "loaded, nothing to extract" path (no green success,
+      // no blank pane).
+      if (extracted.length === 0) {
+        return {
+          ...state,
+          result: { title: event.title, markdown: event.markdown },
+          outcome: "empty",
+        };
+      }
+      // A 200 can still be a soft block the block detector never sees: it reads
+      // the HTML status, not the extracted text. Two tells, both judged on the
+      // extracted Markdown: a challenge page that leaked its "verifying you are
+      // human" copy, or a sliver of text (a fingerprint/geo-gated promo shell,
+      // every real page we measure is tens of kilobytes; every shell is a few
+      // hundred chars). We still show whatever came back, but flag it as limited
+      // rather than dressing a shell up as a clean win.
+      const CHALLENGE =
+        /performing security verification|verifying you are (?:not a bot|human)|just a moment|checking your browser|checking if the site connection is secure|request rejected|unusual traffic|enable javascript and cookies/i;
+      const challenged = CHALLENGE.test(extracted);
+      const thin = extracted.length < 500;
+      // Live runs only: a canned recording is a trusted, authored result.
+      const suspect = state.live && (challenged || thin);
       return {
         ...state,
-        result: { title: event.title, markdown: event.markdown },
-        outcome: extracted.length < 40 ? "empty" : "won",
+        result: {
+          title: event.title,
+          markdown: event.markdown,
+          suspect,
+          suspectReason: !suspect
+            ? undefined
+            : challenged
+              ? "The site returned a bot-challenge page, not content."
+              : "Only a sliver of text came back, often a reduced page served to a non-trusted client (a soft block).",
+        },
+        outcome: "won",
       };
     }
     case "exhausted":
@@ -117,8 +147,8 @@ function reduce(state: State, event: ClimbEvent): State {
   }
 }
 
-function rootReduce(state: State, action: ClimbEvent | { kind: "reset" }): State {
-  if (action.kind === "reset") return initialState();
+function rootReduce(state: State, action: ClimbEvent | { kind: "reset"; live?: boolean }): State {
+  if (action.kind === "reset") return { ...initialState(), live: action.live ?? false };
   return reduce(state, action);
 }
 
@@ -171,7 +201,7 @@ export function ClimbDemo({
   const url = liveUrl ?? (script ? urlOf(script) : "");
 
   useEffect(() => {
-    dispatch({ kind: "reset" });
+    dispatch({ kind: "reset", live: Boolean(liveUrl) });
 
     // Live mode: drive the reducer from the backend SSE stream.
     if (liveUrl) {
@@ -457,12 +487,26 @@ function ResultPanel({
     );
   }
 
+  const suspect = Boolean(result?.suspect);
   return (
-    <div className="mt-4 overflow-hidden rounded-lg border border-white/10 bg-black/30">
+    <div
+      className={`mt-4 overflow-hidden rounded-lg border bg-black/30 ${
+        suspect ? "border-amber-500/20" : "border-white/10"
+      }`}
+    >
       <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
-        <span className="font-mono text-[11px] text-accent">✓ extracted</span>
+        {suspect ? (
+          <span className="font-mono text-[11px] text-amber-400">⚠ limited content</span>
+        ) : (
+          <span className="font-mono text-[11px] text-accent">✓ extracted</span>
+        )}
         <span className="font-mono text-[11px] text-zinc-500">Markdown · 1 page</span>
       </div>
+      {suspect && result?.suspectReason ? (
+        <p className="border-b border-amber-500/20 px-3 py-2 text-[12px] text-amber-300/80">
+          {result.suspectReason} Try a content page (a product, listing, or article).
+        </p>
+      ) : null}
       <pre className="overflow-x-auto p-3 text-[12px] leading-relaxed text-zinc-300">
         {result?.markdown}
       </pre>

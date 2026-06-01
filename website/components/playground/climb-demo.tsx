@@ -28,7 +28,7 @@ type State = {
   tiers: Record<TierName, TierState>;
   climbingTo: TierName | null;
   result: { title: string; markdown: string } | null;
-  outcome: "running" | "won" | "lost" | "error";
+  outcome: "running" | "won" | "empty" | "lost" | "error";
   lostReason?: string;
   error?: string;
 };
@@ -86,8 +86,20 @@ function reduce(state: State, event: ClimbEvent): State {
         ...state,
         tiers: { ...state.tiers, [event.tier]: { status: "success", pill: `${event.status} OK` } },
       };
-    case "result":
-      return { ...state, result: { title: event.title, markdown: event.markdown }, outcome: "won" };
+    case "result": {
+      // A rung returned 200 but extraction came back empty (or near-empty): a
+      // JS-only SPA shell, or a soft-block that serves a blank 200 the block
+      // detector cannot see (it reads the HTML, not the extracted Markdown).
+      // Surface it honestly as "loaded, nothing to extract" rather than a green
+      // success with a blank pane. The threshold is generous so a genuinely
+      // short page still counts as a win.
+      const extracted = event.markdown.trim();
+      return {
+        ...state,
+        result: { title: event.title, markdown: event.markdown },
+        outcome: extracted.length < 40 ? "empty" : "won",
+      };
+    }
     case "exhausted":
       return {
         ...state,
@@ -276,7 +288,7 @@ export function ClimbDemo({
                 state.tiers[TIER_ORDER[i + 1]].status !== "idle"
               }
               climbingHere={state.climbingTo === tier}
-              won={state.outcome === "won"}
+              won={state.outcome === "won" || state.outcome === "empty"}
             />
           ))}
         </ol>
@@ -425,6 +437,21 @@ function ResultPanel({
         <p className="mt-1 text-[12px] text-zinc-500">
           WebReaper reports the block instead of returning challenge-page garbage. A
           captcha-solver tier is on the roadmap.
+        </p>
+      </div>
+    );
+  }
+
+  if (outcome === "empty") {
+    return (
+      <div className="mt-4 rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+        <p className="text-[13px] text-zinc-300">
+          The page loaded{result?.title ? ` (“${result.title}”)` : ""}, but there was
+          no extractable text content.
+        </p>
+        <p className="mt-1 text-[12px] text-zinc-500">
+          Often a JavaScript-only landing page, or a soft block that serves an empty
+          page. Try a content page (an article or product), not a site’s homepage.
         </p>
       </div>
     );

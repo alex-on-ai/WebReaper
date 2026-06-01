@@ -18,10 +18,16 @@ const TIERB_ENDPOINT = "/api/playground/tier-b/scrape";
 
 // Example sites that show the climb best (each challenges a plain HTTP fetch, so
 // the climb escalates). Pure suggestions; the input accepts any URL.
+// Each is a real bot-protected page that 403s a plain HTTP fetch and clears at
+// the browser rung through the residential proxy. Prefer deep content pages
+// (a product, a catalog) over site homepages: a homepage is often a JS-only
+// shell that loads but yields no extractable text (handled honestly by the
+// "empty" outcome, but a poor demo). walmart's product page is the proven
+// dramatic climb (CF -> ~17k chars of real content).
 const EXAMPLES = [
+  { label: "walmart.com", url: "https://www.walmart.com/ip/PlayStation-5-Console/363472942" },
   { label: "rozetka.com.ua", url: "https://hard.rozetka.com.ua/ua/ups/c80108/" },
   { label: "leboncoin.fr", url: "https://www.leboncoin.fr" },
-  { label: "indeed.com", url: "https://www.indeed.com" },
 ] as const;
 
 /** Accept bare hostnames too: prepend https:// and validate the scheme. */

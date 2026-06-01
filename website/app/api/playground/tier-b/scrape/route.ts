@@ -1,5 +1,6 @@
 import {
   SSE_HEADERS,
+  allowedTierBTarget,
   captureEmail,
   checkRateLimits,
   checkTierBBudget,
@@ -31,6 +32,11 @@ export async function GET(req: Request): Promise<Response> {
   const target = safeHttpUrl(params.get("url"));
   if (!target) return sseError("Enter a valid http(s) URL to scrape.");
 
+  // Browser-tier SSRF / abuse guard (server-side, so a hand-crafted request that
+  // skips the client's target picker is still bounded to the curated demo hosts).
+  const allowed = allowedTierBTarget(target);
+  if (!allowed.ok) return sseError(allowed.reason);
+
   const ip = clientIp(req);
 
   const turnstile = await verifyTurnstile(params.get("cf"), ip);
@@ -39,10 +45,11 @@ export async function GET(req: Request): Promise<Response> {
   const limit = await checkRateLimits(ip);
   if (!limit.ok) return sseError(limit.reason);
 
-  // Capture the lead before metering, so an at-capacity visitor is still on the
-  // list when shown the "sign up" message.
-  const email = await captureEmail(params.get("email"), ip);
-  if (!email.ok) return sseError(email.reason);
+  // Email is now captured AFTER the run (the post-run waitlist nudge), so the
+  // climb starts with no friction. If a client still passes one, capture it
+  // best-effort; an invalid address is ignored rather than blocking the run.
+  const rawEmail = params.get("email");
+  if (rawEmail) await captureEmail(rawEmail, ip);
 
   const budget = await checkTierBBudget();
   if (!budget.ok) return sseError(budget.reason);

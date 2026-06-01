@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useReducer, useState } from "react";
+import { type ReactNode, useEffect, useReducer, useRef, useState } from "react";
 import {
   AppWindow,
   ArrowUp,
@@ -28,7 +28,7 @@ type State = {
   tiers: Record<TierName, TierState>;
   climbingTo: TierName | null;
   result: { title: string; markdown: string } | null;
-  outcome: "running" | "won" | "lost" | "error";
+  outcome: "running" | "won" | "empty" | "lost" | "error";
   lostReason?: string;
   error?: string;
 };
@@ -86,8 +86,20 @@ function reduce(state: State, event: ClimbEvent): State {
         ...state,
         tiers: { ...state.tiers, [event.tier]: { status: "success", pill: `${event.status} OK` } },
       };
-    case "result":
-      return { ...state, result: { title: event.title, markdown: event.markdown }, outcome: "won" };
+    case "result": {
+      // A rung returned 200 but extraction came back empty (or near-empty): a
+      // JS-only SPA shell, or a soft-block that serves a blank 200 the block
+      // detector cannot see (it reads the HTML, not the extracted Markdown).
+      // Surface it honestly as "loaded, nothing to extract" rather than a green
+      // success with a blank pane. The threshold is generous so a genuinely
+      // short page still counts as a win.
+      const extracted = event.markdown.trim();
+      return {
+        ...state,
+        result: { title: event.title, markdown: event.markdown },
+        outcome: extracted.length < 40 ? "empty" : "won",
+      };
+    }
     case "exhausted":
       return {
         ...state,
@@ -124,17 +136,33 @@ const PLAYGROUND_ENDPOINT = "/api/playground/scrape";
  * Drives the climb view from one of two sources, both folding into the same
  * reducer: a recorded `script` (the canned hero / demos) or a live SSE stream
  * from the gate (`liveUrl`). Exactly one is expected. `turnstileToken` is
- * forwarded to the gate as `cf` when Turnstile is configured.
+ * forwarded to the gate as `cf` when Turnstile is configured. `endpoint` selects
+ * the gate route (defaults to the Tier A scrape gate; the Tier B climb passes its
+ * own route), and `email` is forwarded as the Tier B capture-gate param.
+ *
+ * With neither `script` nor `liveUrl` the terminal is idle (the editable "ready
+ * to type" state): pass `prompt` to replace the `webreaper scrape <url>` command
+ * line with your own node (an input). `onConclude` fires once when a run reaches
+ * a terminal outcome (used to reveal the CTA after the canned run, and the
+ * waitlist nudge after a live run).
  */
 export function ClimbDemo({
   script,
   liveUrl,
   turnstileToken,
+  email,
+  endpoint = PLAYGROUND_ENDPOINT,
+  prompt,
+  onConclude,
   className,
 }: {
   script?: ClimbScript;
   liveUrl?: string;
   turnstileToken?: string;
+  email?: string;
+  endpoint?: string;
+  prompt?: ReactNode;
+  onConclude?: () => void;
   className?: string;
 }) {
   const [state, dispatch] = useReducer(rootReduce, undefined, initialState);
@@ -149,7 +177,8 @@ export function ClimbDemo({
     if (liveUrl) {
       const params = new URLSearchParams({ url: liveUrl });
       if (turnstileToken) params.set("cf", turnstileToken);
-      const source = new EventSource(`${PLAYGROUND_ENDPOINT}?${params.toString()}`);
+      if (email) params.set("email", email);
+      const source = new EventSource(`${endpoint}?${params.toString()}`);
       source.onmessage = (e) => {
         let event: ClimbEvent;
         try {
@@ -180,9 +209,29 @@ export function ClimbDemo({
       return () => clearTimeout(t);
     }
     return playScript(script.events, dispatch);
-  }, [script, liveUrl, turnstileToken, runId]);
+  }, [script, liveUrl, turnstileToken, email, endpoint, runId]);
+
+  // Fire onConclude exactly once per run, when the outcome leaves "running". A
+  // ref holds the latest callback so its identity does not re-trigger the effect;
+  // the ref is written in an effect (never during render) per react-hooks rules.
+  const onConcludeRef = useRef(onConclude);
+  useEffect(() => {
+    onConcludeRef.current = onConclude;
+  });
+  const concludedRef = useRef(false);
+  useEffect(() => {
+    if (state.outcome === "running") {
+      concludedRef.current = false;
+      return;
+    }
+    if (!concludedRef.current) {
+      concludedRef.current = true;
+      onConcludeRef.current?.();
+    }
+  }, [state.outcome]);
 
   const replay = () => setRunId((n) => n + 1);
+  const hasRun = Boolean(script || liveUrl);
 
   return (
     <div
@@ -198,23 +247,33 @@ export function ClimbDemo({
           <span className="h-3 w-3 rounded-full bg-[#28c840]" />
         </span>
         <span className="mx-auto font-mono text-xs text-zinc-500">webreaper</span>
-        <button
-          type="button"
-          onClick={replay}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1 font-mono text-[11px] text-zinc-500 transition hover:text-zinc-200"
-          aria-label="Replay the climb"
-        >
-          <RotateCw className="h-3 w-3" />
-          replay
-        </button>
+        {hasRun ? (
+          <button
+            type="button"
+            onClick={replay}
+            className="flex items-center gap-1.5 rounded-md px-2 py-1 font-mono text-[11px] text-zinc-500 transition hover:text-zinc-200"
+            aria-label="Replay the climb"
+          >
+            <RotateCw className="h-3 w-3" />
+            replay
+          </button>
+        ) : (
+          // Balance the header opposite the traffic-light dots while the terminal
+          // is in its editable "ready to type" state.
+          <span className="w-[52px]" aria-hidden />
+        )}
       </div>
 
       <div className="p-4 font-mono text-[13px] leading-relaxed sm:p-5">
         <div className="flex items-start gap-2">
           <span className="select-none text-accent">❯</span>
-          <span className="break-all text-zinc-200">
-            webreaper scrape {url}
-          </span>
+          {prompt ? (
+            <div className="min-w-0 flex-1">{prompt}</div>
+          ) : (
+            <span className="break-all text-zinc-200">
+              webreaper scrape {url}
+            </span>
+          )}
         </div>
 
         <ol className="mt-4 space-y-0" aria-live="polite">
@@ -229,6 +288,7 @@ export function ClimbDemo({
                 state.tiers[TIER_ORDER[i + 1]].status !== "idle"
               }
               climbingHere={state.climbingTo === tier}
+              won={state.outcome === "won" || state.outcome === "empty"}
             />
           ))}
         </ol>
@@ -250,12 +310,14 @@ function TierRow({
   isLast,
   nextActive,
   climbingHere,
+  won,
 }: {
   tier: TierName;
   state: TierState;
   isLast: boolean;
   nextActive: boolean;
   climbingHere: boolean;
+  won: boolean;
 }) {
   const Icon = TIER_ICON[tier];
   const reached = state.status !== "idle";
@@ -292,7 +354,7 @@ function TierRow({
           <span className={cn("transition-colors", reached ? "text-zinc-200" : "text-zinc-600")}>
             {TIER_LABEL[tier]}
           </span>
-          <StatusPill status={state.status} pill={state.pill} />
+          <StatusPill status={state.status} pill={state.pill} won={won} />
         </div>
         {state.reason && (
           <p className="mt-0.5 text-[12px] text-zinc-500">{state.reason}</p>
@@ -308,9 +370,16 @@ function TierRow({
   );
 }
 
-function StatusPill({ status, pill }: { status: TierStatus; pill?: string }) {
+function StatusPill({ status, pill, won }: { status: TierStatus; pill?: string; won?: boolean }) {
   if (status === "idle") {
-    return <span className="font-mono text-[11px] text-zinc-600">queued</span>;
+    // An idle rung reads "not needed" only when a LOWER rung already got through
+    // (the climb won without reaching here). On a failed/blocked/in-flight run an
+    // unreached rung is still just "queued" — never claim it was unnecessary.
+    return (
+      <span className="font-mono text-[11px] text-zinc-600">
+        {won ? "not needed" : "queued"}
+      </span>
+    );
   }
   const base = "inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-mono text-[11px]";
   if (status === "active") {
@@ -368,6 +437,21 @@ function ResultPanel({
         <p className="mt-1 text-[12px] text-zinc-500">
           WebReaper reports the block instead of returning challenge-page garbage. A
           captcha-solver tier is on the roadmap.
+        </p>
+      </div>
+    );
+  }
+
+  if (outcome === "empty") {
+    return (
+      <div className="mt-4 rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+        <p className="text-[13px] text-zinc-300">
+          The page loaded{result?.title ? ` (“${result.title}”)` : ""}, but there was
+          no extractable text content.
+        </p>
+        <p className="mt-1 text-[12px] text-zinc-500">
+          Often a JavaScript-only landing page, or a soft block that serves an empty
+          page. Try a content page (an article or product), not a site’s homepage.
         </p>
       </div>
     );

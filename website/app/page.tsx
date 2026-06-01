@@ -19,8 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { CodeBlock } from "@/components/code/code-block";
 import { CopyButton } from "@/components/code/copy-button";
-import { ClimbDemo } from "@/components/playground/climb-demo";
-import { CLIMB_SCRIPTS } from "@/lib/playground/climb-events";
+import { HeroClimb } from "@/components/playground/hero-climb";
 import { GitHubIcon } from "@/components/icons";
 import { siteConfig } from "@/lib/site";
 
@@ -222,6 +221,11 @@ function Mark({ value }: { value: string }) {
 }
 
 export default function Home() {
+  // The live Tier B climb is gated: it is metered (a real browser through a
+  // residential proxy) and email-captured. Enable with
+  // NEXT_PUBLIC_PLAYGROUND_TIERB_LIVE=1 once the Tier B Fly app + edge env are
+  // set; until then the hero stays a recorded demo.
+  const tierBLive = process.env.NEXT_PUBLIC_PLAYGROUND_TIERB_LIVE === "1";
   return (
     <>
       {/* Hero */}
@@ -273,7 +277,7 @@ export default function Home() {
             </div>
           </div>
 
-          <ClimbDemo script={CLIMB_SCRIPTS[0]} className="mx-auto mt-16 max-w-3xl" />
+          <HeroClimb live={tierBLive} className="mx-auto mt-16 max-w-3xl" />
         </div>
       </section>
 

@@ -1,5 +1,20 @@
 # Changelog
 
+## 11.1.2: faster browser rung + a climb-progress seam
+
+A small additive release: browser-mode scrapes return sooner, the escalating loader gains an observability seam, and two transport/installer fixes land. No breaking changes, no API removals.
+
+- **Faster browser rung ([ADR-0083] transport tuning).** The raw-CDP transport (`WebReaper.Cdp`) waited up to 30s for the page load event and polled a JS-challenge interstitial for up to 20s. Both were capture *deadlines*, not targets: the DOM is ready long before the load event settles on an ad-heavy page, and a Cloudflare-style challenge that clears does so in the first few seconds. The load wait is now capped at 12s and the interstitial poll at 8s (1s steps); on timeout the current DOM is captured as before, and a page still showing a challenge is a real block the detector flags. Measured on a real climb: a browser-rung success dropped from ~22s to ~9s, and a blocked rung from ~53s to ~40s. Helps every CDP consumer, including the CLI's `--browser` path; nothing about the result changes, only the dead waiting.
+- **Climb-progress observer seam ([ADR-0085]).** `EscalatingPageLoader` now reports each step of a climb (attempt, blocked, climbing, succeeded, exhausted) through a new `IClimbObserver` seam, with `NullClimbObserver` as the zero-overhead default. Wire one with `ScraperEngineBuilder.WithClimbObserver(...)` to surface live per-rung progress (the live scrape playground streams it over SSE); a no-op for everyone who does not.
+- **CDP launch-and-connect teardown fix ([ADR-0058]).** `.WithCdpPageLoader(CdpLaunchOptions)` now registers its spawned browser for engine teardown, so the launched Chromium is killed on engine disposal instead of leaking on a long-running host. The CLI was unaffected (it exits per scrape); server consumers that build an engine per request were not.
+- **`WebReaper.Stealth.CloakBrowser` installer fix.** The binary auto-download now resolves a real CloakBrowser release (the `chromium-vNNN` tag scheme), verifies the asset against the release `SHA256SUMS`, extracts with the BCL (`System.Formats.Tar`, AOT-clean), and fails fast on an unshipped platform (macOS / linux-arm64 / win-x86 are not published).
+
+All 14 packages ship at 11.1.2 (lockstep).
+
+[ADR-0083]: docs/adr/0083-escalating-page-loader.md
+[ADR-0085]: docs/adr/0085-climb-progress-observer-seam.md
+[ADR-0058]: docs/adr/0058-engine-teardown-disposal.md
+
 ## 11.1.1: AI extraction in the MCP server + discoverability
 
 A small additive release on top of v11.1.0's AI extraction.

@@ -1,0 +1,93 @@
+---
+title: "Watch the climb, live: a real scrape in the homepage terminal"
+description: The terminal on the WebReaper homepage now runs a real climb against a site you choose, HTTP to a browser, streamed live, not a recording.
+date: 2026-06-01
+author: WebReaper Team
+tags:
+  - announcement
+  - stealth
+---
+
+The terminal on the [WebReaper homepage](https://webreaper.ai) used to play a
+recording. It still opens with one, a known climb against a bot-protected site
+so you can see the shape of the thing. But now there is a second button under
+it: **Try it on a real site**. Click it, type any URL, and the same terminal
+runs an actual scrape and streams each step back as it happens.
+
+No sign-up to watch. One email to run your own.
+
+## What you are watching
+
+WebReaper treats bot protection as a ladder it climbs only as far as a page
+forces it to. The live terminal shows every rung in real time:
+
+- **HTTP.** A plain request goes out first. On a protected site it comes back a
+  403 or a challenge page, and the rung lights up red.
+- **Headless browser.** WebReaper escalates to a real browser, through a
+  residential exit so the request looks like a person. Most Cloudflare and
+  DataDome challenges clear here, and you get the page back as clean Markdown.
+- **Stealth.** The top rung, a hardened stealth browser, for the sites the
+  vanilla browser cannot pass.
+
+The climb stops the moment a rung gets through, so a page that never needed a
+browser is served from the HTTP rung in well under a second, and the higher
+rungs read **not needed**. That is the whole point of escalation: you pay for a
+browser only when the site makes you.
+
+## It tells the truth when it loses
+
+The interesting part of a live demo is what happens when it does not work, and
+this is where most scraping demos quietly cheat. The hardest managed challenges,
+the ones that read your actual GPU pixels rather than just your user agent, are
+not beatable from a commodity cloud host. When WebReaper hits one of those, the
+terminal does not hand you a challenge page dressed up as success. It climbs to
+the top, reports the block, and says so.
+
+You will also see the honest shape of real pages. Point it at a marketing
+homepage and you often get a thin result, because that page is a JavaScript
+shell with no text to extract. Point it at a product page or an article and you
+get the real content. The terminal shows you which you got, rather than padding
+an empty result.
+
+That honesty is deliberate. A scraper that returns a Cloudflare interstitial as
+"the page" is worse than useless in a pipeline, because you do not find out
+until the bad data is three steps downstream.
+
+## The same engine you run locally
+
+There is nothing special about the playground's scraper. It is the same
+`webreaper` you install and run on your own machine, driving the same
+escalating page loader, emitting the same per-rung progress. The live terminal
+just forwards that progress over the wire so you can watch it climb.
+
+Locally it is one command:
+
+```bash
+# A plain scrape auto-climbs to a browser when a page looks blocked
+webreaper scrape https://example.com
+
+# Bot-protected? Add the stealth backend and let it escalate on a challenge
+webreaper scrape https://example.com --browser --auto-stealth
+```
+
+Or in code, the climb is built into the one page loader, so a crawl gets it for
+free:
+
+```csharp
+using WebReaper.Builders;
+
+var engine = await ScraperEngineBuilder
+    .Crawl("https://example.com")
+    .AsMarkdown()
+    .WriteToConsole()
+    .BuildAsync();
+
+await engine.RunAsync();
+```
+
+## Try it
+
+Open [webreaper.ai](https://webreaper.ai), watch the recorded climb, then run a
+real one. Pick one of the suggested bot-protected sites or paste your own URL.
+It is the fastest way to see what WebReaper actually does, on a site you care
+about, in about the time it takes to read this sentence.

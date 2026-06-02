@@ -16,14 +16,14 @@ import { CLIMB_SCRIPTS } from "@/lib/playground/climb-events";
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 const TIERB_ENDPOINT = "/api/playground/tier-b/scrape";
 
-// Example sites that show the climb best (each challenges a plain HTTP fetch, so
-// the climb escalates). Pure suggestions; the input accepts any URL.
-// Each is a real bot-protected page that 403s a plain HTTP fetch and clears at
-// the browser rung through the residential proxy. Prefer deep content pages
-// (a product, a catalog) over site homepages: a homepage is often a JS-only
-// shell that loads but yields no extractable text (handled honestly by the
-// "empty" outcome, but a poor demo). walmart's product page is the proven
-// dramatic climb (CF -> ~17k chars of real content).
+// Example sites for the climb. Pure suggestions; the input accepts any URL (the
+// host allowlist is off in prod). Each 403s a plain HTTP fetch, so the climb
+// escalates to the browser rung through the residential proxy. Outcomes differ
+// and that is intentional: walmart's product page clears with ~20k chars of real
+// content; rozetka/leboncoin soft-block (the browser gets a 200 but a reduced
+// page), which the client surfaces honestly as the amber "limited content"
+// caveat instead of a green win. Prefer deep content pages (a product, a catalog)
+// over homepages, which are often JS-only shells with no extractable text.
 const EXAMPLES = [
   { label: "walmart.com", url: "https://www.walmart.com/ip/PlayStation-5-Console/363472942" },
   { label: "rozetka.com.ua", url: "https://hard.rozetka.com.ua/ua/ups/c80108/" },

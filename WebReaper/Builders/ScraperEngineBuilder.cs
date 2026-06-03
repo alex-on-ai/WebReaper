@@ -573,11 +573,29 @@ public class ScraperEngineBuilder
     /// <summary>
     /// Invoke <paramref name="scrapingResultHandler"/> for every scraped
     /// record. ADR-0038: sugar for registering a delegate
-    /// <see cref="IScraperSink"/> — an in-process delegate destination, not a
+    /// <see cref="IScraperSink"/>, an in-process delegate destination, not a
     /// separate notification seam; it composes with the other sinks and
     /// receives its own clone of the record, like any sink. To react to a page
-    /// <em>before</em> it reaches the sinks (enrich / filter / repair), use
+    /// <em>before</em> it reaches the sinks (enrich, filter, repair), use
     /// <see cref="Process(IPageProcessor)"/> instead.
+    /// <para>
+    /// This is the idiomatic way to collect records in-process without a custom
+    /// sink: the handler is called concurrently (the Crawl driver fans records
+    /// out to sinks under <c>Parallel.ForEachAsync</c>; see
+    /// <see cref="IScraperSink.EmitAsync"/>), so collect into a thread-safe type
+    /// such as <c>ConcurrentBag&lt;ParsedData&gt;</c>.
+    /// </para>
+    /// <example>
+    /// <code>
+    /// var records = new ConcurrentBag&lt;ParsedData&gt;();
+    /// await using var engine = await ScraperEngineBuilder
+    ///     .Crawl("https://example.com").AsMarkdown()
+    ///     .Subscribe(records.Add)
+    ///     .BuildAsync();
+    /// await engine.RunAsync();
+    /// // records now holds every scraped ParsedData
+    /// </code>
+    /// </example>
     /// </summary>
     public ScraperEngineBuilder Subscribe(Action<ParsedData> scrapingResultHandler)
     {

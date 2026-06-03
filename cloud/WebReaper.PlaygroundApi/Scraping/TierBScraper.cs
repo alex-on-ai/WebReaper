@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using WebReaper.Builders;
 using WebReaper.Cdp;
+using WebReaper.PlaygroundApi.Ssrf;
 using WebReaper.Proxy.Abstract;
 using WebReaper.Stealth.CloakBrowser;
 
@@ -124,7 +125,7 @@ public sealed class TierBScraper
         string url,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        if (!TryNormalizeUrl(url, out var uri))
+        if (!RequestUrl.TryNormalizeUrl(url, out var uri))
         {
             yield return ClimbEvents.Error("Enter a valid http(s) URL.");
             yield break;
@@ -335,19 +336,6 @@ public sealed class TierBScraper
         TimeoutException => "The browser did not start in time.",
         _ => "The climb failed before it could finish.",
     };
-
-    private static bool TryNormalizeUrl(string? url, out Uri uri)
-    {
-        uri = null!;
-        if (string.IsNullOrWhiteSpace(url))
-            return false;
-        if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var parsed))
-            return false;
-        if (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps)
-            return false;
-        uri = parsed;
-        return true;
-    }
 
     /// <summary>
     /// One browser rung whose CDP process is launched lazily (on the first load

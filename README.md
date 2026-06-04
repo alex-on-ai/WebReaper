@@ -167,7 +167,19 @@ Writes a polished `SKILL.md` to `.claude/skills/webreaper/`. Claude Code loads i
 
 ### MCP server
 
-The [`WebReaper.Mcp`](https://www.nuget.org/packages/WebReaper.Mcp) satellite (ADR-0049) exposes `scrape`, `map`, `extract` as MCP tools over stdio, for clients that can't reach the CLI directly (Cursor, Claude Desktop, Copilot Studio). It's a thin facade over the library API; primary agent surface remains the CLI.
+Two MCP servers expose the same tools (`scrape`, `map`, `extract`, `extract_with_prompt`, `crawl`) for clients that speak the Model Context Protocol:
+
+- **[`WebReaper.Mcp`](https://www.nuget.org/packages/WebReaper.Mcp)** (ADR-0049) speaks **stdio**, for local clients that spawn a process: Cursor, Claude Desktop, Copilot Studio.
+- **[`WebReaper.Mcp.AspNetCore`](https://www.nuget.org/packages/WebReaper.Mcp.AspNetCore)** (ADR-0086) speaks **Streamable HTTP**, for clients that connect to a URL. The headline case is **n8n**, whose MCP Client node is URL-only and cannot reach a stdio server. Run the Chromium-baked image, point n8n's MCP Client node at the URL with a bearer token, and call the tools from a workflow:
+
+  ```bash
+  docker run -p 8080:8080 -e WEBREAPER_MCP_TOKEN=your-secret \
+    ghcr.io/pavlovtech/webreaper-mcp-http:latest
+  ```
+
+  See the [n8n quickstart](docs/mcp-http-quickstart.md).
+
+Both are thin facades over the library API; the primary agent surface remains the CLI.
 
 ### CLI inside any agent harness
 
@@ -283,7 +295,7 @@ dotnet run --project Examples/WebReaper.AiNativeShowcase -- changetrack
 
 ## Packages
 
-The release ships thirteen packages (one core, twelve satellites), all versioned in lockstep at `11.0.0`. The core stays dependency-light and Native-AOT-publishable with zero warnings; satellites bring their own SDK dependencies and quarantine them off the core graph (ADR-0009).
+The release ships fifteen packages (one core, fourteen satellites), all versioned in lockstep. The core stays dependency-light and Native-AOT-publishable with zero warnings; satellites bring their own SDK dependencies and quarantine them off the core graph (ADR-0009).
 
 | Package | Add it for | Key builder calls |
 |---|---|---|
@@ -292,9 +304,11 @@ The release ships thirteen packages (one core, twelve satellites), all versioned
 | **WebReaper.Playwright** | Microsoft.Playwright-backed transport (ADR-0053). Multi-browser (Chromium default; Firefox / WebKit opt-in). All ten `PageAction` arms supported. Use for modern multi-browser needs; pair with `WebReaper.Cdp` for AOT or stealth. | `.WithPlaywrightPageLoader()` |
 | **WebReaper.Stealth.CloakBrowser** | First stealth-backend satellite (ADR-0054). Auto-downloads CloakBrowser on first use; composes on `WebReaper.Cdp`. Disposable via the ADR-0058 engine teardown chain. | `.WithCloakBrowser()` |
 | **WebReaper.AI** | LLM extraction, LLM action resolver, LLM brain, LLM self-healing, LLM schema inferrer (ADR-0044 / 0050 / 0051 / 0067). Built on `Microsoft.Extensions.AI`; bring your own `IChatClient`. | `.WithLlmFallback` `.WithLlmSelfHealing` `.WithLlmExtractor` `.WithLlmAgentBrain` `.WithLlmActionResolver` `.WithLlmSchemaInferrer` `.UseAi(client)` |
+| **WebReaper.AI.Http** | AOT-safe OpenAI-compatible `IChatClient` (ADR-0084): raw `HttpClient` plus System.Text.Json source-gen, no provider SDK. The bring-your-own client the AOT CLI and the MCP servers use for prompt extraction. | `new OpenAiCompatibleChatClient(baseUrl, model, apiKey)` |
 | **WebReaper.Extraction.Attributes** | The `[ScrapeSchema]` / `[ScrapeField]` marker types. Standalone, no runtime cost. | `[ScrapeSchema]` `[ScrapeField("selector")]` |
 | **WebReaper.Extraction.Generators** | Roslyn source generator that emits `static Schema` plus reflection-free `static Materialize(JsonObject)` (ADR-0045). `DevelopmentDependency=true`; does not propagate at runtime. | compile-time only |
-| **WebReaper.Mcp** | MCP server `Exe` exposing scrape / map / extract as MCP tools over stdio (ADR-0049). Interop adapter for MCP-only clients. | the package _is_ the executable |
+| **WebReaper.Mcp** | MCP server `Exe` exposing scrape / map / extract / extract_with_prompt / crawl as MCP tools over **stdio** (ADR-0049). Interop adapter for local MCP clients (Cursor, Claude Desktop). | the package _is_ the executable |
+| **WebReaper.Mcp.AspNetCore** | MCP server over **Streamable HTTP** (ADR-0086) for URL-based clients like n8n; same tools as `WebReaper.Mcp`, plus bearer-token auth and a `WEBREAPER_CDP_URL` browser sidecar. Also ships as a Chromium-baked container image. | the package _is_ the executable; or `docker run ghcr.io/pavlovtech/webreaper-mcp-http` |
 | **WebReaper.Mongo** | MongoDB result sink and MongoDB-backed config / cookie storage. | `.WriteToMongoDb(...)` `.WithMongoDbConfigStorage(...)` `.WithMongoDbCookieStorage(...)` |
 | **WebReaper.Redis** | Redis scheduler, visited-link tracker, result sink, config / cookie storage. | `.WithRedisScheduler(...)` `.TrackVisitedLinksInRedis(...)` `.WriteToRedis(...)` `.WithRedisConfigStorage(...)` `.WithRedisCookieStorage(...)` |
 | **WebReaper.AzureServiceBus** | Distributed scheduler over an Azure Service Bus queue. | `.WithAzureServiceBusScheduler(...)` |

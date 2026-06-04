@@ -1,6 +1,7 @@
 using System.Formats.Tar;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using WebReaper.Cdp;
@@ -211,6 +212,9 @@ public static class CloakBrowserInstaller
         await TarFile.ExtractToDirectoryAsync(gz, destDir, overwriteFiles: true, ct);
     }
 
+    // The Unix file-mode APIs throw on Windows; the only caller is guarded by
+    // `if (!OperatingSystem.IsWindows())`, which this attribute lets CA1416 see.
+    [UnsupportedOSPlatform("windows")]
     private static void EnsureExecutable(string path)
     {
         var mode = File.GetUnixFileMode(path);

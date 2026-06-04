@@ -70,6 +70,39 @@ public sealed class McpHttpServerTests
     }
 
     [Fact]
+    public async Task Bearer_token_gates_the_mcp_endpoint()
+    {
+        var (app, baseAddress) = await McpHttpServer.StartForTestAsync([], token: "secret");
+        await using (app)
+        {
+            // With the token: the handshake and tools/list succeed.
+            var authorized = new HttpClientTransport(new HttpClientTransportOptions
+            {
+                Endpoint = baseAddress,
+                TransportMode = HttpTransportMode.StreamableHttp,
+                AdditionalHeaders = new Dictionary<string, string> { ["Authorization"] = "Bearer secret" },
+            });
+            await using (var client = await McpClient.CreateAsync(authorized))
+            {
+                var names = (await client.ListToolsAsync()).Select(t => t.Name).ToHashSet();
+                Assert.Contains("scrape", names);
+            }
+
+            // Without the token: the handshake / first call is rejected.
+            var anonymous = new HttpClientTransport(new HttpClientTransportOptions
+            {
+                Endpoint = baseAddress,
+                TransportMode = HttpTransportMode.StreamableHttp,
+            });
+            await Assert.ThrowsAnyAsync<Exception>(async () =>
+            {
+                await using var client = await McpClient.CreateAsync(anonymous);
+                await client.ListToolsAsync();
+            });
+        }
+    }
+
+    [Fact]
     public async Task Health_endpoint_responds()
     {
         var (app, baseAddress) = await McpHttpServer.StartForTestAsync([]);

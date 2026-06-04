@@ -124,18 +124,20 @@ public static class WebReaperTools
         "Returns the extracted record(s) as JSON Lines. Requires an OpenAI-compatible LLM " +
         "endpoint configured on the MCP host: set WEBREAPER_LLM_MODEL and WEBREAPER_LLM_BASE_URL " +
         "(e.g. https://api.openai.com/v1 or http://localhost:11434/v1), with the API key in " +
-        "WEBREAPER_LLM_API_KEY (or OPENAI_API_KEY). Costs one LLM call.")]
+        "WEBREAPER_LLM_API_KEY (or OPENAI_API_KEY). The optional model parameter overrides " +
+        "WEBREAPER_LLM_MODEL for this call. Costs one LLM call.")]
     public static async Task<string> ExtractWithPrompt(
         [Description("The URL to extract from.")] string url,
         [Description("Natural-language description of the data to extract.")] string prompt,
-        [Description("Use the headless browser (for JS-rendered pages). Auto-spawns a system Chrome / Chromium / Edge via WebReaper.Cdp. Default false.")] bool browser = false)
+        [Description("Use the headless browser (for JS-rendered pages). Auto-spawns a system Chrome / Chromium / Edge via WebReaper.Cdp. Default false.")] bool browser = false,
+        [Description("Optional model id, overriding WEBREAPER_LLM_MODEL for this call (e.g. gpt-4o-mini). The API key is never a parameter; it stays in the environment.")] string? model = null)
     {
         if (string.IsNullOrWhiteSpace(url))
             throw new ArgumentException("URL is required.", nameof(url));
         if (string.IsNullOrWhiteSpace(prompt))
             throw new ArgumentException("Prompt is required.", nameof(prompt));
 
-        using var chatClient = CreateChatClient();
+        using var chatClient = CreateChatClient(model);
 
         var seed = browser
             ? ScraperEngineBuilder.CrawlWithBrowser(url)
@@ -212,25 +214,20 @@ public static class WebReaperTools
         }
     }
 
-    // ADR-0084: build the OpenAI-compatible chat client from environment config.
-    // The same explicit-config contract as the CLI: model + base URL are
-    // required; the API key is read from the environment only, never a param.
-    internal static OpenAiCompatibleChatClient CreateChatClient()
+    // ADR-0084 / ADR-0086: build the OpenAI-compatible chat client. Model +
+    // base URL are required (LlmConfig.Resolve throws actionably if missing);
+    // a per-call modelOverride wins over WEBREAPER_LLM_MODEL; the API key is
+    // read from the environment only, never a parameter.
+    internal static OpenAiCompatibleChatClient CreateChatClient(string? modelOverride = null)
     {
-        var model = Environment.GetEnvironmentVariable("WEBREAPER_LLM_MODEL");
-        var baseUrl = Environment.GetEnvironmentVariable("WEBREAPER_LLM_BASE_URL");
-        var apiKey = Environment.GetEnvironmentVariable("WEBREAPER_LLM_API_KEY")
-                  ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+        var config = LlmConfig.Resolve(
+            modelOverride,
+            Environment.GetEnvironmentVariable(LlmConfig.ModelEnvVar),
+            Environment.GetEnvironmentVariable(LlmConfig.BaseUrlEnvVar),
+            Environment.GetEnvironmentVariable("WEBREAPER_LLM_API_KEY")
+                ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY"));
 
-        if (string.IsNullOrWhiteSpace(model))
-            throw new InvalidOperationException(
-                "extract_with_prompt needs an LLM model: set the WEBREAPER_LLM_MODEL environment variable.");
-        if (string.IsNullOrWhiteSpace(baseUrl))
-            throw new InvalidOperationException(
-                "extract_with_prompt needs an LLM endpoint: set WEBREAPER_LLM_BASE_URL "
-                + "(e.g. https://api.openai.com/v1).");
-
-        return new OpenAiCompatibleChatClient(baseUrl, model, apiKey);
+        return new OpenAiCompatibleChatClient(config.BaseUrl, config.Model, config.ApiKey);
     }
 
     // Tiny JSON → Schema parser (same shape the CLI accepts, ADR-0043).

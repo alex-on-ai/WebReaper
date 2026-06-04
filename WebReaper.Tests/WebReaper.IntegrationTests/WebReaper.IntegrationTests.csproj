@@ -44,5 +44,6 @@
     <ProjectReference Include="..\..\WebReaper.Mongo\WebReaper.Mongo.csproj" />
     <ProjectReference Include="..\..\WebReaper.AI\WebReaper.AI.csproj" />
     <ProjectReference Include="..\..\WebReaper.Mcp\WebReaper.Mcp.csproj" />
+    <ProjectReference Include="..\..\WebReaper.Mcp.AspNetCore\WebReaper.Mcp.AspNetCore.csproj" />
   </ItemGroup>
 </Project>

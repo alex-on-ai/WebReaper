@@ -5,7 +5,6 @@ using ModelContextProtocol.Server;
 using WebReaper.AI;
 using WebReaper.AI.Http;
 using WebReaper.Builders;
-using WebReaper.Cdp;
 using WebReaper.Core.Mapping;
 using WebReaper.Domain.Parsing;
 using WebReaper.Sinks.Models;
@@ -40,16 +39,9 @@ public static class WebReaperTools
             .Subscribe(records.Add)
             .StopWhenAllLinksProcessed();
 
-        // ADR-0073: wire WebReaper.Cdp launch-and-connect on browser=true.
-        // The Cdp loader's PATH search finds google-chrome / chromium /
-        // chrome / microsoft-edge / msedge; fails actionable when none
-        // present. `await using` the engine so the spawned-Chromium
-        // process tears down with the call (ADR-0058 chain).
-        if (browser)
-            builder = builder.WithCdpPageLoader(new CdpLaunchOptions());
-
-        await using var engine = await builder.BuildAsync();
-        await engine.RunAsync();
+        // ADR-0073 / ADR-0086: browser=true launches managed Chromium, or
+        // connects to WEBREAPER_CDP_URL (a shared browser sidecar) when set.
+        await RunBrowserAwareAsync(builder, browser);
 
         var output = new StringBuilder();
         foreach (var record in records)
@@ -119,12 +111,8 @@ public static class WebReaperTools
             .Subscribe(records.Add)
             .StopWhenAllLinksProcessed();
 
-        // ADR-0073: see Scrape() above for the wiring rationale.
-        if (browser)
-            builder = builder.WithCdpPageLoader(new CdpLaunchOptions());
-
-        await using var engine = await builder.BuildAsync();
-        await engine.RunAsync();
+        // ADR-0086: see Scrape() for the browser-wiring rationale.
+        await RunBrowserAwareAsync(builder, browser);
 
         // JSON Lines: one record per line.
         return string.Join("\n", records.Select(r => r.Data.ToJsonString()));
@@ -136,18 +124,20 @@ public static class WebReaperTools
         "Returns the extracted record(s) as JSON Lines. Requires an OpenAI-compatible LLM " +
         "endpoint configured on the MCP host: set WEBREAPER_LLM_MODEL and WEBREAPER_LLM_BASE_URL " +
         "(e.g. https://api.openai.com/v1 or http://localhost:11434/v1), with the API key in " +
-        "WEBREAPER_LLM_API_KEY (or OPENAI_API_KEY). Costs one LLM call.")]
+        "WEBREAPER_LLM_API_KEY (or OPENAI_API_KEY). The optional model parameter overrides " +
+        "WEBREAPER_LLM_MODEL for this call. Costs one LLM call.")]
     public static async Task<string> ExtractWithPrompt(
         [Description("The URL to extract from.")] string url,
         [Description("Natural-language description of the data to extract.")] string prompt,
-        [Description("Use the headless browser (for JS-rendered pages). Auto-spawns a system Chrome / Chromium / Edge via WebReaper.Cdp. Default false.")] bool browser = false)
+        [Description("Use the headless browser (for JS-rendered pages). Auto-spawns a system Chrome / Chromium / Edge via WebReaper.Cdp. Default false.")] bool browser = false,
+        [Description("Optional model id, overriding WEBREAPER_LLM_MODEL for this call (e.g. gpt-4o-mini). The API key is never a parameter; it stays in the environment.")] string? model = null)
     {
         if (string.IsNullOrWhiteSpace(url))
             throw new ArgumentException("URL is required.", nameof(url));
         if (string.IsNullOrWhiteSpace(prompt))
             throw new ArgumentException("Prompt is required.", nameof(prompt));
 
-        using var chatClient = CreateChatClient();
+        using var chatClient = CreateChatClient(model);
 
         var seed = browser
             ? ScraperEngineBuilder.CrawlWithBrowser(url)
@@ -160,34 +150,84 @@ public static class WebReaperTools
             .Subscribe(records.Add)
             .StopWhenAllLinksProcessed();
 
-        if (browser)
-            builder = builder.WithCdpPageLoader(new CdpLaunchOptions());
-
-        await using var engine = await builder.BuildAsync();
-        await engine.RunAsync();
+        // ADR-0086: see Scrape() for the browser-wiring rationale.
+        await RunBrowserAwareAsync(builder, browser);
 
         return string.Join("\n", records.Select(r => r.Data.ToJsonString()));
     }
 
-    // ADR-0084: build the OpenAI-compatible chat client from environment config.
-    // The same explicit-config contract as the CLI: model + base URL are
-    // required; the API key is read from the environment only, never a param.
-    internal static OpenAiCompatibleChatClient CreateChatClient()
+    [McpServerTool(Name = "crawl"), Description(
+        "Crawl a whole site: recursively follow on-domain links from the start URL "
+        + "and return one Markdown record per page as JSON Lines. WARNING: this is a "
+        + "single long BLOCKING call with NO progress feedback, bounded by max_pages "
+        + "(default 50, hard cap 1000). For a large site prefer 'map' to list URLs, "
+        + "then 'scrape' each URL, so every call stays short and you keep per-URL control.")]
+    public static async Task<string> Crawl(
+        [Description("The site root URL to crawl.")] string url,
+        [Description("Maximum pages to sweep. Default 50, hard cap 1000.")] int maxPages = CrawlBounds.DefaultMaxPages,
+        [Description("Use the headless browser for each page (JS-rendered sites). Default false.")] bool browser = false)
     {
-        var model = Environment.GetEnvironmentVariable("WEBREAPER_LLM_MODEL");
-        var baseUrl = Environment.GetEnvironmentVariable("WEBREAPER_LLM_BASE_URL");
-        var apiKey = Environment.GetEnvironmentVariable("WEBREAPER_LLM_API_KEY")
-                  ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+        if (string.IsNullOrWhiteSpace(url))
+            throw new ArgumentException("URL is required.", nameof(url));
 
-        if (string.IsNullOrWhiteSpace(model))
-            throw new InvalidOperationException(
-                "extract_with_prompt needs an LLM model: set the WEBREAPER_LLM_MODEL environment variable.");
-        if (string.IsNullOrWhiteSpace(baseUrl))
-            throw new InvalidOperationException(
-                "extract_with_prompt needs an LLM endpoint: set WEBREAPER_LLM_BASE_URL "
-                + "(e.g. https://api.openai.com/v1).");
+        var cap = CrawlBounds.Validate(maxPages);
 
-        return new OpenAiCompatibleChatClient(baseUrl, model, apiKey);
+        var seed = browser
+            ? ScraperEngineBuilder.CrawlWithBrowser(url)
+            : ScraperEngineBuilder.Crawl(url);
+
+        // ADR-0081 site sweep, bounded. The crawl loop is parallel (ADR-0022),
+        // so sink emits are concurrent; guard the collection.
+        var records = new List<ParsedData>();
+        var builder = seed.AsMarkdown()
+            .Sweep(new SweepOptions())
+            .PageCrawlLimit(cap)
+            .Subscribe(r => { lock (records) records.Add(r); })
+            .StopWhenAllLinksProcessed();
+
+        await RunBrowserAwareAsync(builder, browser);
+
+        // JSON Lines: one record per swept page.
+        return string.Join("\n", records.Select(r => r.Data.ToJsonString()));
+    }
+
+    // ADR-0086: resolve the browser plan (launch vs connect-to-CDP-url), apply
+    // it, and run the engine. Managed-Chromium launches pass through a
+    // concurrency gate; connect / HTTP calls do not. `await using` tears the
+    // engine (and any spawned Chromium) down on completion (ADR-0058).
+    private static async Task RunBrowserAwareAsync(ScraperEngineBuilder builder, bool browser)
+    {
+        var plan = BrowserTransport.Select(
+            browser, Environment.GetEnvironmentVariable(BrowserTransport.CdpUrlEnvVar));
+        builder = builder.ApplyBrowser(plan);
+
+        var gated = plan.Mode == BrowserLaunchMode.Launch;
+        if (gated) await BrowserLaunchGate.WaitAsync();
+        try
+        {
+            await using var engine = await builder.BuildAsync();
+            await engine.RunAsync();
+        }
+        finally
+        {
+            if (gated) BrowserLaunchGate.Release();
+        }
+    }
+
+    // ADR-0084 / ADR-0086: build the OpenAI-compatible chat client. Model +
+    // base URL are required (LlmConfig.Resolve throws actionably if missing);
+    // a per-call modelOverride wins over WEBREAPER_LLM_MODEL; the API key is
+    // read from the environment only, never a parameter.
+    internal static OpenAiCompatibleChatClient CreateChatClient(string? modelOverride = null)
+    {
+        var config = LlmConfig.Resolve(
+            modelOverride,
+            Environment.GetEnvironmentVariable(LlmConfig.ModelEnvVar),
+            Environment.GetEnvironmentVariable(LlmConfig.BaseUrlEnvVar),
+            Environment.GetEnvironmentVariable("WEBREAPER_LLM_API_KEY")
+                ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY"));
+
+        return new OpenAiCompatibleChatClient(config.BaseUrl, config.Model, config.ApiKey);
     }
 
     // Tiny JSON → Schema parser (same shape the CLI accepts, ADR-0043).

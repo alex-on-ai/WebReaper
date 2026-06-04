@@ -5,7 +5,6 @@ using ModelContextProtocol.Server;
 using WebReaper.AI;
 using WebReaper.AI.Http;
 using WebReaper.Builders;
-using WebReaper.Cdp;
 using WebReaper.Core.Mapping;
 using WebReaper.Domain.Parsing;
 using WebReaper.Sinks.Models;
@@ -40,16 +39,9 @@ public static class WebReaperTools
             .Subscribe(records.Add)
             .StopWhenAllLinksProcessed();
 
-        // ADR-0073: wire WebReaper.Cdp launch-and-connect on browser=true.
-        // The Cdp loader's PATH search finds google-chrome / chromium /
-        // chrome / microsoft-edge / msedge; fails actionable when none
-        // present. `await using` the engine so the spawned-Chromium
-        // process tears down with the call (ADR-0058 chain).
-        if (browser)
-            builder = builder.WithCdpPageLoader(new CdpLaunchOptions());
-
-        await using var engine = await builder.BuildAsync();
-        await engine.RunAsync();
+        // ADR-0073 / ADR-0086: browser=true launches managed Chromium, or
+        // connects to WEBREAPER_CDP_URL (a shared browser sidecar) when set.
+        await RunBrowserAwareAsync(builder, browser);
 
         var output = new StringBuilder();
         foreach (var record in records)
@@ -119,12 +111,8 @@ public static class WebReaperTools
             .Subscribe(records.Add)
             .StopWhenAllLinksProcessed();
 
-        // ADR-0073: see Scrape() above for the wiring rationale.
-        if (browser)
-            builder = builder.WithCdpPageLoader(new CdpLaunchOptions());
-
-        await using var engine = await builder.BuildAsync();
-        await engine.RunAsync();
+        // ADR-0086: see Scrape() for the browser-wiring rationale.
+        await RunBrowserAwareAsync(builder, browser);
 
         // JSON Lines: one record per line.
         return string.Join("\n", records.Select(r => r.Data.ToJsonString()));
@@ -160,13 +148,33 @@ public static class WebReaperTools
             .Subscribe(records.Add)
             .StopWhenAllLinksProcessed();
 
-        if (browser)
-            builder = builder.WithCdpPageLoader(new CdpLaunchOptions());
-
-        await using var engine = await builder.BuildAsync();
-        await engine.RunAsync();
+        // ADR-0086: see Scrape() for the browser-wiring rationale.
+        await RunBrowserAwareAsync(builder, browser);
 
         return string.Join("\n", records.Select(r => r.Data.ToJsonString()));
+    }
+
+    // ADR-0086: resolve the browser plan (launch vs connect-to-CDP-url), apply
+    // it, and run the engine. Managed-Chromium launches pass through a
+    // concurrency gate; connect / HTTP calls do not. `await using` tears the
+    // engine (and any spawned Chromium) down on completion (ADR-0058).
+    private static async Task RunBrowserAwareAsync(ScraperEngineBuilder builder, bool browser)
+    {
+        var plan = BrowserTransport.Select(
+            browser, Environment.GetEnvironmentVariable(BrowserTransport.CdpUrlEnvVar));
+        builder = builder.ApplyBrowser(plan);
+
+        var gated = plan.Mode == BrowserLaunchMode.Launch;
+        if (gated) await BrowserLaunchGate.WaitAsync();
+        try
+        {
+            await using var engine = await builder.BuildAsync();
+            await engine.RunAsync();
+        }
+        finally
+        {
+            if (gated) BrowserLaunchGate.Release();
+        }
     }
 
     // ADR-0084: build the OpenAI-compatible chat client from environment config.

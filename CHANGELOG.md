@@ -1,5 +1,20 @@
 # Changelog
 
+## 11.2.0: MCP server over HTTP (n8n and remote clients)
+
+An additive release: a new Streamable HTTP MCP server so URL-based clients (n8n, hosted agents) can reach WebReaper, plus a CDP-sidecar option and a bounded crawl tool that both MCP servers gain. No breaking changes, no API removals.
+
+- **New `WebReaper.Mcp.AspNetCore` satellite ([ADR-0086]).** A Streamable HTTP MCP host (stateless mode), the sibling of the stdio `WebReaper.Mcp` server. The stdio server stays the choice for local process-spawning agents (Cursor, Claude Desktop); this one is for clients that connect to a URL, the most prominent being n8n, whose built-in MCP Client node is URL-only and cannot reach a stdio server. It reuses the same tools, adds bearer-token auth (`WEBREAPER_MCP_TOKEN`, mandatory when bound to a non-loopback interface, so an unauthenticated public scraper is structurally refused), and a `/health` endpoint. A Chromium-baked Docker image, a `docker-compose` example, and an n8n quickstart ship with it (`docs/mcp-http-quickstart.md`).
+- **`crawl` tool on both MCP servers ([ADR-0086]).** A bounded whole-site sweep, `crawl(url, maxPages, browser)`, returning one Markdown record per page as JSON Lines. The default cap is 50 pages (hard cap 1000) because MCP has no streaming, and the tool description flags it as a single blocking call with no progress feedback, pointing at `map` then per-URL `scrape` for large sites.
+- **`WEBREAPER_CDP_URL` browser sidecar ([ADR-0086]).** A `browser=true` MCP call now connects to an external CDP endpoint (a shared Chromium / browserless pool) when `WEBREAPER_CDP_URL` is set, instead of launching managed Chromium; `WEBREAPER_MCP_MAX_CONCURRENT_BROWSERS` caps concurrent launches. The selection lives in the shared satellite, so the stdio server gains the sidecar option too.
+- **Per-call model on `extract_with_prompt` ([ADR-0086]).** The tool gains an optional `model` parameter overriding `WEBREAPER_LLM_MODEL` for that one call; the API key stays environment-only, never a tool argument.
+
+The container image publishes to `ghcr.io/pavlovtech/webreaper-mcp-http` (tagged with the version and `latest`) on each release.
+
+All 15 packages ship at 11.2.0 (lockstep).
+
+[ADR-0086]: docs/adr/0086-mcp-streamable-http-transport.md
+
 ## 11.1.2: faster browser rung + a climb-progress seam
 
 A small additive release: browser-mode scrapes return sooner, the escalating loader gains an observability seam, and two transport/installer fixes land. No breaking changes, no API removals.

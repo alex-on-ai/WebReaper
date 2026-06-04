@@ -70,6 +70,28 @@ public sealed class McpHttpServerTests
     }
 
     [Fact]
+    public async Task Crawl_tool_returns_markdown_records_over_http()
+    {
+        var (client, app) = await StartAsync();
+        await using (app)
+        await using (client)
+        {
+            var names = (await client.ListToolsAsync()).Select(t => t.Name).ToHashSet();
+            Assert.Contains("crawl", names);
+
+            var result = await client.CallToolAsync(
+                "crawl",
+                new Dictionary<string, object?> { ["url"] = _site.BaseUrl, ["maxPages"] = 10 },
+                cancellationToken: CancellationToken.None);
+
+            var jsonl = FirstText(result);
+            Assert.False(string.IsNullOrWhiteSpace(jsonl));
+            // Markdown records carry a "markdown" field; JSON Lines = one per page.
+            Assert.Contains("markdown", jsonl);
+        }
+    }
+
+    [Fact]
     public async Task Bearer_token_gates_the_mcp_endpoint()
     {
         var (app, baseAddress) = await McpHttpServer.StartForTestAsync([], token: "secret");

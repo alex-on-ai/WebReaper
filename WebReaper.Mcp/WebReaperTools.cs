@@ -154,6 +154,41 @@ public static class WebReaperTools
         return string.Join("\n", records.Select(r => r.Data.ToJsonString()));
     }
 
+    [McpServerTool(Name = "crawl"), Description(
+        "Crawl a whole site: recursively follow on-domain links from the start URL "
+        + "and return one Markdown record per page as JSON Lines. WARNING: this is a "
+        + "single long BLOCKING call with NO progress feedback, bounded by max_pages "
+        + "(default 50, hard cap 1000). For a large site prefer 'map' to list URLs, "
+        + "then 'scrape' each URL, so every call stays short and you keep per-URL control.")]
+    public static async Task<string> Crawl(
+        [Description("The site root URL to crawl.")] string url,
+        [Description("Maximum pages to sweep. Default 50, hard cap 1000.")] int maxPages = CrawlBounds.DefaultMaxPages,
+        [Description("Use the headless browser for each page (JS-rendered sites). Default false.")] bool browser = false)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            throw new ArgumentException("URL is required.", nameof(url));
+
+        var cap = CrawlBounds.Validate(maxPages);
+
+        var seed = browser
+            ? ScraperEngineBuilder.CrawlWithBrowser(url)
+            : ScraperEngineBuilder.Crawl(url);
+
+        // ADR-0081 site sweep, bounded. The crawl loop is parallel (ADR-0022),
+        // so sink emits are concurrent; guard the collection.
+        var records = new List<ParsedData>();
+        var builder = seed.AsMarkdown()
+            .Sweep(new SweepOptions())
+            .PageCrawlLimit(cap)
+            .Subscribe(r => { lock (records) records.Add(r); })
+            .StopWhenAllLinksProcessed();
+
+        await RunBrowserAwareAsync(builder, browser);
+
+        // JSON Lines: one record per swept page.
+        return string.Join("\n", records.Select(r => r.Data.ToJsonString()));
+    }
+
     // ADR-0086: resolve the browser plan (launch vs connect-to-CDP-url), apply
     // it, and run the engine. Managed-Chromium launches pass through a
     // concurrency gate; connect / HTTP calls do not. `await using` tears the

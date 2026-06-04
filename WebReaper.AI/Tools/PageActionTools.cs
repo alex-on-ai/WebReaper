@@ -75,7 +75,7 @@ internal static class PageActionTools
                         ["description"] = "Why this click is the right next step. (Brain only — resolver ignores.)",
                     },
                 },
-                ["required"] = new JsonArray { "selector" },
+                ["required"] = new JsonArray { (JsonNode)"selector" },
             });
 
         /// <summary>Construct the arm from a tool call's argument JSON, or
@@ -117,7 +117,7 @@ internal static class PageActionTools
                         ["description"] = "Why this wait is the right next step. (Brain only — resolver ignores.)",
                     },
                 },
-                ["required"] = new JsonArray { "ms" },
+                ["required"] = new JsonArray { (JsonNode)"ms" },
             });
 
         /// <summary>Always succeeds — missing or malformed <c>ms</c> defaults
@@ -161,7 +161,7 @@ internal static class PageActionTools
                         ["description"] = "Why this wait is the right next step. (Brain only — resolver ignores.)",
                     },
                 },
-                ["required"] = new JsonArray { "selector" },
+                ["required"] = new JsonArray { (JsonNode)"selector" },
             });
 
         public static ToolCallResult<PageAction.WaitForSelector> FromArguments(JsonElement args)
@@ -265,7 +265,7 @@ internal static class PageActionTools
                         ["description"] = "Why this evaluation is the right next step. (Brain only — resolver ignores.)",
                     },
                 },
-                ["required"] = new JsonArray { "expression" },
+                ["required"] = new JsonArray { (JsonNode)"expression" },
             });
 
         public static ToolCallResult<PageAction.EvaluateExpression> FromArguments(JsonElement args)
@@ -310,7 +310,7 @@ internal static class PageActionTools
                         ["description"] = "Why this key press is the right next step. (Brain only; resolver ignores.)",
                     },
                 },
-                ["required"] = new JsonArray { "key" },
+                ["required"] = new JsonArray { (JsonNode)"key" },
             });
 
         /// <summary>Construct the arm from a tool call's argument JSON, or
@@ -354,7 +354,7 @@ internal static class PageActionTools
                         ["description"] = "Why this scroll is the right next step. (Brain only; resolver ignores.)",
                     },
                 },
-                ["required"] = new JsonArray { "selector" },
+                ["required"] = new JsonArray { (JsonNode)"selector" },
             });
 
         public static ToolCallResult<PageAction.ScrollIntoView> FromArguments(JsonElement args)
@@ -402,7 +402,7 @@ internal static class PageActionTools
                         ["description"] = "Why this fill is the right next step. (Brain only; resolver ignores.)",
                     },
                 },
-                ["required"] = new JsonArray { "selector", "value" },
+                ["required"] = new JsonArray { (JsonNode)"selector", (JsonNode)"value" },
             });
 
         public static ToolCallResult<PageAction.Fill> FromArguments(JsonElement args)
@@ -451,7 +451,7 @@ internal static class PageActionTools
                         ["description"] = "Why this intent is the right next step.",
                     },
                 },
-                ["required"] = new JsonArray { "intent" },
+                ["required"] = new JsonArray { (JsonNode)"intent" },
             });
 
         public static ToolCallResult<PageAction.SemanticAct> FromArguments(JsonElement args)

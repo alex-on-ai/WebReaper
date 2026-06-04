@@ -82,7 +82,7 @@ internal static class AgentDecisionTools
                         ["description"] = "Why this is the right next step.",
                     },
                 },
-                ["required"] = new JsonArray { "schema", "reason" },
+                ["required"] = new JsonArray { (JsonNode)"schema", (JsonNode)"reason" },
             });
 
         /// <summary>Construct the arm from a tool call's argument JSON plus
@@ -156,7 +156,7 @@ internal static class AgentDecisionTools
                         ["description"] = "Why this URL is the right next step.",
                     },
                 },
-                ["required"] = new JsonArray { "url", "reason" },
+                ["required"] = new JsonArray { (JsonNode)"url", (JsonNode)"reason" },
             });
 
         public static ToolCallResult<AgentDecision.Follow> FromArguments(JsonElement args, string reason)
@@ -190,7 +190,7 @@ internal static class AgentDecisionTools
                         ["description"] = "Why the run is stopping — goal satisfied, dead-end, etc.",
                     },
                 },
-                ["required"] = new JsonArray { "reason" },
+                ["required"] = new JsonArray { (JsonNode)"reason" },
             });
 
         /// <summary>Always succeeds — Stop has no required arguments beyond

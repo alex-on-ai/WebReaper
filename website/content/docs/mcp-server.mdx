@@ -1,47 +1,87 @@
 ---
 title: MCP server
-description: Expose WebReaper as MCP tools for Cursor, Claude Desktop, and Copilot Studio.
+description: Expose WebReaper as MCP tools over stdio or Streamable HTTP, for Cursor, Claude Desktop, Copilot Studio, and n8n.
 category: Integrations
 order: 1
 ---
 
 For agent clients that speak the Model Context Protocol, WebReaper ships an MCP
 server. It surfaces the same scraping capabilities as tools, so an MCP-only
-client can scrape, map, and extract without shelling out to the CLI itself.
+client can scrape, map, crawl, and extract without shelling out to the CLI itself.
+
+There are two servers, same tools, different transports:
+
+- **`WebReaper.Mcp`** speaks **stdio**, the transport local clients use when they
+  spawn the server as a child process (Cursor, Claude Desktop, Copilot Studio).
+- **`WebReaper.Mcp.AspNetCore`** speaks **Streamable HTTP**, for clients that
+  connect to a URL instead. The headline case is **n8n**, whose MCP Client node
+  is URL-only and cannot reach a stdio server.
 
 ## What it provides
 
-The `WebReaper.Mcp` satellite exposes WebReaper's core operations as MCP tools:
+Both servers expose WebReaper's core operations as MCP tools:
 
-- scrape a page to clean Markdown
-- map a site to discover its URLs
-- extract structured data with a JSON schema
-- extract structured data by a natural-language prompt, with an LLM (`extract_with_prompt`)
-
-Any MCP-capable client can call these, including:
-
-- Cursor
-- Claude Desktop
-- Copilot Studio
+- `scrape` a page to clean Markdown
+- `map` a site to discover its URLs
+- `extract` structured data with a JSON schema
+- `extract_with_prompt` structured data by a natural-language prompt, with an LLM
+- `crawl` a whole site: a bounded on-domain sweep returning one Markdown record per page
 
 The `extract_with_prompt` tool calls an LLM, so it needs an OpenAI-compatible
 endpoint configured on the MCP host: set `WEBREAPER_LLM_MODEL` and
 `WEBREAPER_LLM_BASE_URL` (for example `https://api.openai.com/v1`, or
 `http://localhost:11434/v1` for a local Ollama), with the API key in
-`WEBREAPER_LLM_API_KEY` (or `OPENAI_API_KEY`). The other tools need no setup.
+`WEBREAPER_LLM_API_KEY` (or `OPENAI_API_KEY`). It also takes an optional per-call
+`model` parameter that overrides `WEBREAPER_LLM_MODEL` for that one call. The
+other tools need no setup.
+
+`crawl` is a single long **blocking** call with no progress feedback, bounded by
+`maxPages` (default 50, hard cap 1000). For a large site, prefer `map` to list
+the URLs and then `scrape` each, so every call stays short.
+
+## Use it with n8n
+
+Run the HTTP server. The container image bakes a headless Chromium, so
+`browser=true` works out of the box:
+
+```bash
+docker run -p 8080:8080 -e WEBREAPER_MCP_TOKEN=your-secret \
+  ghcr.io/pavlovtech/webreaper-mcp-http:latest
+```
+
+`WEBREAPER_MCP_TOKEN` is required here: the server binds all interfaces in the
+container, and it refuses to start on a non-loopback interface without a token,
+so an unauthenticated public scraper is structurally prevented.
+
+Then add an **MCP Client Tool** node in your n8n workflow:
+
+- Server Transport: **HTTP Streamable** (not the deprecated SSE)
+- MCP Endpoint URL: the server URL (for example `http://webreaper-mcp:8080` when
+  both run on the same Docker network, or `http://host.docker.internal:8080`)
+- Authentication: **Bearer**, value = your `WEBREAPER_MCP_TOKEN`
+
+n8n fetches the tool list automatically. Attach the node to an AI Agent, or call
+a tool directly and iterate over results with n8n's own nodes (for example `map`,
+then a loop that `scrape`s each URL).
+
+To share one browser pool instead of launching Chromium per call, set
+`WEBREAPER_CDP_URL` to an external CDP endpoint (a browserless sidecar);
+`WEBREAPER_MCP_MAX_CONCURRENT_BROWSERS` caps concurrent launches otherwise.
 
 ## When to reach for it
 
 If you are using Claude Code, the bundled [Claude Code skill](/docs/claude-code-skill)
 is the simpler path: it routes plain-language requests to the CLI directly. The
-MCP server is the right adapter for clients that do not run shell commands and
-talk to tools over MCP instead.
+MCP servers are the right adapter for clients that talk to tools over MCP, the
+stdio one for local process-spawning clients and the HTTP one for URL-based
+clients like n8n. The scope is single-tenant, self-run; a hosted multi-tenant
+endpoint is future work.
 
 ## Version pinning
 
-The MCP satellite is built on the preview `ModelContextProtocol` SDK. Because it
-is a preview dependency, pin the package version explicitly when you ship, so a
-later preview release does not change behavior under you:
+The MCP satellites are built on the preview `ModelContextProtocol` SDK. Because
+it is a preview dependency, pin the package version explicitly when you ship, so
+a later preview release does not change behavior under you:
 
 ```bash
 dotnet add package WebReaper.Mcp --version <pinned-version>

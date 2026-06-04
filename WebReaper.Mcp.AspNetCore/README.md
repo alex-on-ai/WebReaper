@@ -17,8 +17,15 @@ dotnet run --project WebReaper.Mcp.AspNetCore
 # then point a Streamable-HTTP MCP client at the printed URL
 ```
 
-The container image (Chromium baked in) is the recommended way to self-host;
-see the repo's deployment docs.
+The container image (Chromium baked in) is the recommended way to self-host:
+
+```bash
+docker build -f WebReaper.Mcp.AspNetCore/Dockerfile -t webreaper-mcp-http .
+docker run --rm -p 8080:8080 -e WEBREAPER_MCP_TOKEN=change-me webreaper-mcp-http
+```
+
+See [docs/mcp-http-quickstart.md](../docs/mcp-http-quickstart.md) for the n8n
+wiring and a `docker-compose.example.yml` (server + optional browser sidecar).
 
 ## Configuration (environment)
 

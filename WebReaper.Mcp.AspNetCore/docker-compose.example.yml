@@ -1,0 +1,41 @@
+# ADR-0086: run the WebReaper Streamable HTTP MCP server next to n8n.
+# Build the image first (context = repo root):
+#   docker build -f WebReaper.Mcp.AspNetCore/Dockerfile -t webreaper-mcp-http .
+# Then: docker compose -f WebReaper.Mcp.AspNetCore/docker-compose.example.yml up
+
+services:
+  webreaper-mcp:
+    image: webreaper-mcp-http
+    environment:
+      # REQUIRED off-loopback: the bind guard refuses to start without it.
+      WEBREAPER_MCP_TOKEN: "change-me-to-a-long-random-secret"
+      # Optional: LLM endpoint for extract_with_prompt. The key lives here,
+      # never as a tool argument.
+      # WEBREAPER_LLM_MODEL: "gpt-4o-mini"
+      # WEBREAPER_LLM_BASE_URL: "https://api.openai.com/v1"
+      # WEBREAPER_LLM_API_KEY: "sk-..."
+      # Optional: cap concurrent managed-Chromium launches (default 4).
+      # WEBREAPER_MCP_MAX_CONCURRENT_BROWSERS: "4"
+      # Optional: connect browser=true calls to the sidecar below instead of
+      # launching the baked Chromium. One shared pool for all requests.
+      # WEBREAPER_CDP_URL: "http://browser:9222"
+    ports:
+      # n8n on the same network reaches it at http://webreaper-mcp:8080 (no
+      # published port needed for that); this exposes it to the host too.
+      - "8080:8080"
+    restart: unless-stopped
+
+  # Optional shared browser pool. Uncomment and set WEBREAPER_CDP_URL above to
+  # use it instead of the Chromium baked into the image.
+  # browser:
+  #   image: ghcr.io/browserless/chromium
+  #   restart: unless-stopped
+
+  # Your n8n (sketch). In the workflow add an MCP Client Tool node:
+  #   Server Transport = HTTP Streamable
+  #   MCP Endpoint URL  = http://webreaper-mcp:8080
+  #   Authentication    = Bearer, value = the WEBREAPER_MCP_TOKEN above
+  # n8n:
+  #   image: docker.n8n.io/n8nio/n8n
+  #   ports: ["5678:5678"]
+  #   restart: unless-stopped

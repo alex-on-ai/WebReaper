@@ -17,13 +17,20 @@ stdio satellite (one shared `WebReaperTools`).
 ## Run it (Docker)
 
 The image bakes a headless Chromium, so `browser=true` works out of the box.
+Each release publishes it to GHCR as
+`ghcr.io/pavlovtech/webreaper-mcp-http:<version>` (and `:latest`):
+
+```bash
+docker run --rm -p 8080:8080 \
+  -e WEBREAPER_MCP_TOKEN=change-me-to-a-long-random-secret \
+  ghcr.io/pavlovtech/webreaper-mcp-http:latest
+```
+
+Or build it yourself (context = repo root):
 
 ```bash
 docker build -f WebReaper.Mcp.AspNetCore/Dockerfile -t webreaper-mcp-http .
-
-docker run --rm -p 8080:8080 \
-  -e WEBREAPER_MCP_TOKEN=change-me-to-a-long-random-secret \
-  webreaper-mcp-http
+docker run --rm -p 8080:8080 -e WEBREAPER_MCP_TOKEN=change-me webreaper-mcp-http
 ```
 
 `WEBREAPER_MCP_TOKEN` is **required** here: the server binds all interfaces in

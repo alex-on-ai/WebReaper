@@ -69,6 +69,7 @@ env:
     WebReaper.Extraction.Attributes
     WebReaper.Extraction.Generators
     WebReaper.Mcp
+    WebReaper.Mcp.AspNetCore
     WebReaper.Cdp
     WebReaper.Playwright
     WebReaper.Stealth.CloakBrowser
@@ -647,3 +648,41 @@ jobs:
           fi
           git commit -m "WebReaper ${VERSION}"
           git push
+
+  # ADR-0086: publish the WebReaper.Mcp.AspNetCore container image to GHCR.
+  # GHCR is the default registry: GitHub-native, authenticated with the
+  # built-in GITHUB_TOKEN (no extra secret), image under the repo owner. Runs
+  # only when the AspNetCore package is in the released set (lockstep version
+  # match) and never on a dry run; gated behind the NuGet release like the CLI
+  # binaries. The container smoke (docker run -> /health + a tools/call) is the
+  # acceptance check this job's published image is verified against post-release.
+  image-publish:
+    name: Publish container image (GHCR)
+    needs: [pack, release]
+    if: ${{ (github.event_name != 'workflow_dispatch' || inputs.dry_run == false) && contains(needs.pack.outputs.packages, 'WebReaper.Mcp.AspNetCore') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push the MCP HTTP server image
+        uses: docker/build-push-action@v6
+        with:
+          # Context = repo root: the host references the library projects.
+          context: .
+          file: WebReaper.Mcp.AspNetCore/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/webreaper-mcp-http:${{ needs.pack.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/webreaper-mcp-http:latest

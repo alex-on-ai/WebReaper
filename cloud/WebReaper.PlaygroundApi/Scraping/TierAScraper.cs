@@ -24,7 +24,7 @@ public sealed class TierAScraper
         string url,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        if (!TryNormalizeUrl(url, out var uri))
+        if (!RequestUrl.TryNormalizeUrl(url, out var uri))
         {
             yield return ClimbEvents.Error("Enter a valid http(s) URL.");
             yield break;
@@ -38,19 +38,6 @@ public sealed class TierAScraper
         // try/catch), returning the events to emit for its outcome.
         foreach (var climbEvent in await FetchAsync(uri, cancellationToken))
             yield return climbEvent;
-    }
-
-    private static bool TryNormalizeUrl(string? url, out Uri uri)
-    {
-        uri = null!;
-        if (string.IsNullOrWhiteSpace(url))
-            return false;
-        if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var parsed))
-            return false;
-        if (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps)
-            return false;
-        uri = parsed;
-        return true;
     }
 
     private static async Task<IReadOnlyList<object>> FetchAsync(Uri uri, CancellationToken cancellationToken)

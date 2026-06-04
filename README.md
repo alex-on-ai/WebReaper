@@ -287,7 +287,7 @@ The release ships thirteen packages (one core, twelve satellites), all versioned
 
 | Package | Add it for | Key builder calls |
 |---|---|---|
-| **WebReaper** | Core. HTTP crawl and parse, in-memory and file scheduler / visited-link tracker / cookie and config storage, Console / CSV / JSON-Lines sinks, Markdown extractor, schema fold. Dependency-light, Native-AOT-ready, Newtonsoft-free. | `Crawl` `Extract` `AsMarkdown` `Follow` `Paginate` `Sweep` `WriteToJsonFile` `WriteToCsvFile` `WriteToConsole` |
+| **WebReaper** | Core. HTTP crawl and parse, in-memory and file scheduler / visited-link tracker / cookie and config storage, Console / CSV / JSON-Lines sinks, Markdown extractor, schema fold. Dependency-light, Native-AOT-ready, Newtonsoft-free. | `Crawl` `Extract` `AsMarkdown` `Follow` `Paginate` `Sweep` `WriteToJsonFile` `WriteToCsvFile` `WriteToConsole` `Subscribe` |
 | **WebReaper.Cdp** | Raw CDP `IPageLoadTransport` (ADR-0052). AOT-clean (no PuppeteerSharp / Playwright dependency); System.Net.WebSockets plus System.Text.Json source-gen. Bedrock for the stealth pattern. | `.WithCdpPageLoader(cdpUrl)` (BYO) or `.WithCdpPageLoader(CdpLaunchOptions)` (launch managed Chromium) |
 | **WebReaper.Playwright** | Microsoft.Playwright-backed transport (ADR-0053). Multi-browser (Chromium default; Firefox / WebKit opt-in). All ten `PageAction` arms supported. Use for modern multi-browser needs; pair with `WebReaper.Cdp` for AOT or stealth. | `.WithPlaywrightPageLoader()` |
 | **WebReaper.Stealth.CloakBrowser** | First stealth-backend satellite (ADR-0054). Auto-downloads CloakBrowser on first use; composes on `WebReaper.Cdp`. Disposable via the ADR-0058 engine teardown chain. | `.WithCloakBrowser()` |
@@ -348,6 +348,31 @@ await engine.RunAsync();
 ```
 
 Each `new("field", "css-selector")` is a leaf; nest schemas for objects, set `IsList = true` for arrays, set `Attr = "href"` to read an HTML attribute instead of inner text.
+
+### Collect records in-process
+
+Get the scraped records back in your own process, no file and no custom sink. Pass `Subscribe` (ADR-0038) the `Add` of a thread-safe collection, then read them after the run:
+
+```csharp
+using System.Collections.Concurrent;
+using WebReaper.Builders;
+using WebReaper.Sinks.Models;
+
+var records = new ConcurrentBag<ParsedData>();
+
+var engine = await ScraperEngineBuilder
+    .Crawl("https://news.ycombinator.com")
+    .AsMarkdown()
+    .Subscribe(records.Add)            // called concurrently; collect into a thread-safe type
+    .BuildAsync();
+
+await engine.RunAsync();
+
+foreach (var record in records)
+    Console.WriteLine($"{record.Url}: {record.Data["markdown"]?.GetValue<string>()?.Length ?? 0} chars");
+```
+
+The Crawl driver fans out to sinks concurrently, so a `ConcurrentBag` is the right collector, not a bare `List`. For structured fields, read your schema keys out of `record.Data` instead of `"markdown"`.
 
 ### Parsing dynamic pages (SPA)
 

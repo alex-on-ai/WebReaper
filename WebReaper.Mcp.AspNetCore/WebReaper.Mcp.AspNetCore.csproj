@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>WebReaper.Mcp.AspNetCore</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>preview</LangVersion>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <PackageId>WebReaper.Mcp.AspNetCore</PackageId>
+    <Title>WebReaper.Mcp.AspNetCore</Title>
+    <Description>Streamable HTTP MCP (Model Context Protocol) server host for WebReaper. Exposes scrape / map / extract / extract_with_prompt / crawl as MCP tools over HTTP, so URL-based MCP clients (n8n, hosted agents) can reach WebReaper. Sibling to the stdio WebReaper.Mcp satellite, reusing its tools. Self-run, single-tenant, bearer-token auth. ADR-0086.</Description>
+    <!-- ADR-0017: MIT, same as the rest of the funnel. -->
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageTags>scraper, crawler, mcp, model-context-protocol, agent, http, n8n</PackageTags>
+    <PackageIcon>logo.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ADR-0086: Streamable HTTP transport. Pinned in lockstep with the
+         ModelContextProtocol version the stdio satellite (WebReaper.Mcp) uses;
+         this package transitively brings ModelContextProtocol at the same pin. -->
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="0.6.0-preview.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ADR-0086: reuse the WebReaperTools class and the shared decision
+         modules (BrowserTransport, CrawlBounds) from the stdio satellite.
+         WebReaper.Mcp already bakes WebReaper.Cdp + WebReaper.AI(.Http). -->
+    <ProjectReference Include="..\WebReaper.Mcp\WebReaper.Mcp.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+    <None Include="..\WebReaper\logo.png" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="WebReaper.Mcp.AspNetCore.Tests" />
+    <InternalsVisibleTo Include="WebReaper.IntegrationTests" />
+  </ItemGroup>
+
+</Project>

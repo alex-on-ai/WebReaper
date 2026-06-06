@@ -1,6 +1,6 @@
 # WebReaper.Playwright
 
-[Microsoft.Playwright](https://playwright.dev/dotnet/)-backed `IPageLoadTransport` for [WebReaper](https://github.com/pavlovtech/WebReaper); the modern, multi-browser headless-scraping satellite. Replaces the deleted `WebReaper.Puppeteer` in v10.
+[Microsoft.Playwright](https://playwright.dev/dotnet/)-backed `IPageLoadTransport` for [WebReaper](https://github.com/alex-on-ai/WebReaper); the modern, multi-browser headless-scraping satellite. Replaces the deleted `WebReaper.Puppeteer` in v10.
 
 ## Why Playwright (not Puppeteer)
 
@@ -57,7 +57,7 @@ await engine.RunAsync();
 + .WithPlaywrightPageLoader()
 ```
 
-That is the full diff for the common case. See [ADR-0053](https://github.com/pavlovtech/WebReaper/blob/master/docs/adr/0053-playwright-satellite-puppeteer-deletion.md) for the deletion rationale.
+That is the full diff for the common case. See [ADR-0053](https://github.com/alex-on-ai/WebReaper/blob/master/docs/adr/0053-playwright-satellite-puppeteer-deletion.md) for the deletion rationale.
 
 ## SemVer
 

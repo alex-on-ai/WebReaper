@@ -16,9 +16,9 @@ internal static class UpdateNotifier
 {
     private const string DisableVar = "WEBREAPER_NO_UPDATE_CHECK";
     private const string LatestUrl =
-        "https://api.github.com/repos/pavlovtech/WebReaper/releases/latest";
+        "https://api.github.com/repos/alex-on-ai/WebReaper/releases/latest";
     private const string InstallHint =
-        "curl -fsSL https://raw.githubusercontent.com/pavlovtech/WebReaper/master/scripts/install.sh | sh -s -- --upgrade";
+        "curl -fsSL https://raw.githubusercontent.com/alex-on-ai/WebReaper/master/scripts/install.sh | sh -s -- --upgrade";
     private static readonly TimeSpan Ttl = TimeSpan.FromHours(24);
     private static readonly TimeSpan FetchTimeout = TimeSpan.FromMilliseconds(1500);
 

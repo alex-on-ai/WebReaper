@@ -1,6 +1,6 @@
 # WebReaper.Mongo
 
-MongoDB adapters for [WebReaper](https://github.com/pavlovtech/WebReaper): a
+MongoDB adapters for [WebReaper](https://github.com/alex-on-ai/WebReaper): a
 result sink, plus MongoDB-backed scraper-config and cookie storage.
 
 Satellite package (ADR-0009): the Mongo adapters are kept out of the WebReaper

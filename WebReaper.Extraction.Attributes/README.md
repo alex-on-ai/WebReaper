@@ -1,6 +1,6 @@
 # WebReaper.Extraction.Attributes
 
-`[ScrapeSchema]` and `[ScrapeField]` marker attributes for [WebReaper](https://github.com/pavlovtech/WebReaper)'s Roslyn source generator. Consumed by [`WebReaper.Extraction.Generators`](https://www.nuget.org/packages/WebReaper.Extraction.Generators) at compile time. Lightweight; no runtime dependencies beyond the BCL.
+`[ScrapeSchema]` and `[ScrapeField]` marker attributes for [WebReaper](https://github.com/alex-on-ai/WebReaper)'s Roslyn source generator. Consumed by [`WebReaper.Extraction.Generators`](https://www.nuget.org/packages/WebReaper.Extraction.Generators) at compile time. Lightweight; no runtime dependencies beyond the BCL.
 
 ## Install
 
@@ -57,7 +57,7 @@ No reflection at runtime; AOT-clean. Schema typos become compile errors.
 
 ## See also
 
-- Main repo: [github.com/pavlovtech/WebReaper](https://github.com/pavlovtech/WebReaper)
+- Main repo: [github.com/alex-on-ai/WebReaper](https://github.com/alex-on-ai/WebReaper)
 - The source generator: [`WebReaper.Extraction.Generators`](https://www.nuget.org/packages/WebReaper.Extraction.Generators)
-- Design: [ADR-0045](https://github.com/pavlovtech/WebReaper/blob/master/docs/adr/0045-scrape-schema-source-generator.md)
-- License: [MIT](https://github.com/pavlovtech/WebReaper/blob/master/LICENSE.txt)
+- Design: [ADR-0045](https://github.com/alex-on-ai/WebReaper/blob/master/docs/adr/0045-scrape-schema-source-generator.md)
+- License: [MIT](https://github.com/alex-on-ai/WebReaper/blob/master/LICENSE.txt)

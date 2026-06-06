@@ -31,7 +31,7 @@ Both branches always return `NoSignal`. The unit tests pass only because they ca
 
 **The detector is fed extracted output, never the raw transport response.** HTTP status is not in the contract at all (`IPageLoader.LoadAsync : Task<string>`), and a non-2xx is thrown rather than returned, so its status is discarded. "Raw HTML" reaches the CLI only as the JSON of an extracted record. Every symptom above follows from that.
 
-[PR #166](https://github.com/pavlovtech/WebReaper/pull/166) shipped a stopgap: a stderr hint when a scrape returns zero records ("retry with `--browser`/`--stealth`"). That is the **Empty result** affordance and it stays; it is not, and was never meant to be, block detection.
+[PR #166](https://github.com/alex-on-ai/WebReaper/pull/166) shipped a stopgap: a stderr hint when a scrape returns zero records ("retry with `--browser`/`--stealth`"). That is the **Empty result** affordance and it stays; it is not, and was never meant to be, block detection.
 
 ## Decision
 

@@ -62,7 +62,7 @@ scripts/test-install.sh
 
 ## 1. Installation matrix (manual)
 
-- [ ] **Homebrew (macOS arm64):** `brew install pavlovtech/webreaper/webreaper` → `webreaper version`
+- [ ] **Homebrew (macOS arm64):** `brew install alex-on-ai/webreaper/webreaper` → `webreaper version`
 - [ ] **Homebrew (macOS x64):** same, on Intel
 - [ ] **install.sh (Linux x64):** clean box, `curl … | sh` → installs, `webreaper version`
 - [ ] **install.sh (Linux arm64):** same

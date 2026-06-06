@@ -3,7 +3,7 @@
 # WebReaper
 
 [![NuGet](https://img.shields.io/nuget/v/WebReaper)](https://www.nuget.org/packages/WebReaper)
-[![CI](https://github.com/pavlovtech/WebReaper/actions/workflows/CI.yml/badge.svg)](https://github.com/pavlovtech/WebReaper/actions/workflows/CI.yml)
+[![CI](https://github.com/alex-on-ai/WebReaper/actions/workflows/CI.yml/badge.svg)](https://github.com/alex-on-ai/WebReaper/actions/workflows/CI.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.txt)
 
 AI-native web scraper. Single binary with a bundled Claude Code skill.
@@ -13,13 +13,13 @@ AI-native web scraper. Single binary with a bundled Claude Code skill.
 **macOS / Linux (Homebrew):**
 
 ```bash
-brew install pavlovtech/webreaper/webreaper
+brew install alex-on-ai/webreaper/webreaper
 ```
 
 **Any POSIX shell (install.sh):**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/pavlovtech/WebReaper/master/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/alex-on-ai/WebReaper/master/scripts/install.sh | sh
 ```
 
 **.NET library:**
@@ -28,7 +28,7 @@ curl -fsSL https://raw.githubusercontent.com/pavlovtech/WebReaper/master/scripts
 dotnet add package WebReaper
 ```
 
-Windows binaries are on the [GitHub Releases page](https://github.com/pavlovtech/WebReaper/releases/latest); `winget` and `Scoop` are on the v10.1 roadmap.
+Windows binaries are on the [GitHub Releases page](https://github.com/alex-on-ai/WebReaper/releases/latest); `winget` and `Scoop` are on the v10.1 roadmap.
 
 **Updating:** `brew upgrade webreaper` (Homebrew), or re-run the install.sh line with `--upgrade` appended (`| sh -s -- --upgrade`), or `dotnet add package WebReaper` (library). When a newer release exists, `scrape` / `crawl` / `map` print a one-line upgrade hint on stderr (interactive terminals only, never in a pipe or CI); disable that check with `WEBREAPER_NO_UPDATE_CHECK=1`.
 

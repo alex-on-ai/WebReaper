@@ -44,13 +44,13 @@ runbook's existing v10.x revisit note stands; this ADR does not reopen it.
 
 Two channels are added on top of the existing GitHub Releases automation:
 
-### 1. Homebrew tap — `pavlovtech/homebrew-webreaper`
+### 1. Homebrew tap — `alex-on-ai/homebrew-webreaper`
 
 A separate repo per the Homebrew tap convention, containing a single
 `Formula/webreaper.rb`. End-user install path:
 
 ```bash
-brew install pavlovtech/webreaper/webreaper
+brew install alex-on-ai/webreaper/webreaper
 ```
 
 (The shorter `brew install webreaper` requires graduation to `homebrew-core`,
@@ -82,7 +82,7 @@ history is auditable here, not split across two repositories.
 A `scripts/install.sh` checked into this repo. Install command:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/pavlovtech/WebReaper/master/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/alex-on-ai/WebReaper/master/scripts/install.sh | sh
 ```
 
 The script is the maximum-care version — ~120 lines, every failure-mode
@@ -97,7 +97,7 @@ handled, no surprises. Specifically:
   trap.
 - OS + arch detection via `uname -sm` → RID, with an explicit, copy-pasteable
   error for unsupported combinations (e.g. FreeBSD, illumos)
-- Latest-release resolution via `https://api.github.com/repos/pavlovtech/WebReaper/releases/latest`;
+- Latest-release resolution via `https://api.github.com/repos/alex-on-ai/WebReaper/releases/latest`;
   prints the resolved tag (`Installing webreaper v10.0.0…`) before extracting;
   `WEBREAPER_VERSION=v10.0.0` env override for reproducibility / pinning
 - Download with retry on network failure (three attempts, exponential
@@ -172,7 +172,7 @@ pipeline addition is real but not launch-blocking.
 audience than winget; bucket repo would mirror the Homebrew tap shape,
 addable in its own ADR.
 
-**(d) Docker image (`docker run pavlovtech/webreaper`)** — deferred
+**(d) Docker image (`docker run alex-on-ai/webreaper`)** — deferred
 post-launch. Container distribution adds CVE-scan + base-image-refresh
 maintenance that isn't justified by the launch audience. CI users can pull
 the Linux binary from the Release page directly.
@@ -203,7 +203,7 @@ See [ADR-0071](0071-macos-codesigning-and-notarization.md).
 
 ## Consequences
 
-- **New repo to create**: `pavlovtech/homebrew-webreaper` (one-time setup).
+- **New repo to create**: `alex-on-ai/homebrew-webreaper` (one-time setup).
 - **New files in this repo**:
   - `homebrew/webreaper.rb.template` — source of the rendered formula.
   - `scripts/install.sh` — the hardened ~120-line installer.
@@ -224,7 +224,7 @@ See [ADR-0071](0071-macos-codesigning-and-notarization.md).
 
 | # | Slice | Blocks on |
 |---|---|---|
-| 1 | Create `pavlovtech/homebrew-webreaper` repo with an empty placeholder Formula | — |
+| 1 | Create `alex-on-ai/homebrew-webreaper` repo with an empty placeholder Formula | — |
 | 2 | Generate `GH_TOKEN_HOMEBREW_TAP` (fine-grained PAT, contents: write on tap repo only) and add to this repo's secrets | step 1 |
 | 3 | `homebrew/webreaper.rb.template` checked into this repo | — |
 | 4 | `release.yml` — new `checksums` job producing the `SHA256SUMS` Release asset | — |

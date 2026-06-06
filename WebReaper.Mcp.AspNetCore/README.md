@@ -1,7 +1,7 @@
 # WebReaper.Mcp.AspNetCore
 
 A **Streamable HTTP** [MCP](https://modelcontextprotocol.io) server host for
-[WebReaper](https://github.com/pavlovtech/WebReaper). It exposes WebReaper's
+[WebReaper](https://github.com/alex-on-ai/WebReaper). It exposes WebReaper's
 scraping tools over HTTP so URL-based MCP clients (n8n, hosted agents) can
 reach them. Sibling to the stdio `WebReaper.Mcp` satellite; both expose the
 same tools (`scrape`, `map`, `extract`, `extract_with_prompt`, `crawl`).

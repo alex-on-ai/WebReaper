@@ -2,9 +2,9 @@
 # install.sh: WebReaper CLI installer (ADR-0070).
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/pavlovtech/WebReaper/master/scripts/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/alex-on-ai/WebReaper/master/scripts/install.sh | sh
 #   # or with flags:
-#   curl -fsSL https://raw.githubusercontent.com/pavlovtech/WebReaper/master/scripts/install.sh | sh -s -- --force
+#   curl -fsSL https://raw.githubusercontent.com/alex-on-ai/WebReaper/master/scripts/install.sh | sh -s -- --force
 #
 # Environment variables:
 #   WEBREAPER_VERSION        : pin to a specific tag (e.g. v10.0.0). Default: latest release.
@@ -31,7 +31,7 @@
 
 set -eu
 
-REPO="pavlovtech/WebReaper"
+REPO="alex-on-ai/WebReaper"
 DEFAULT_PREFIX="/usr/local/bin"
 FALLBACK_PREFIX="${HOME}/.local/bin"
 
@@ -62,7 +62,7 @@ usage() {
 # install.sh: WebReaper CLI installer
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/pavlovtech/WebReaper/master/scripts/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/alex-on-ai/WebReaper/master/scripts/install.sh | sh
 #
 # Flags: --force, --upgrade, --help.
 # See script header for env vars and exit codes.

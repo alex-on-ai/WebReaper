@@ -7,16 +7,16 @@ export const siteConfig = {
   ogImage: "/og/default.png",
   version: "11.0.0",
   install: {
-    brew: "brew install pavlovtech/webreaper/webreaper",
-    curl: "curl -fsSL https://raw.githubusercontent.com/pavlovtech/WebReaper/master/scripts/install.sh | sh",
+    brew: "brew install alex-on-ai/webreaper/webreaper",
+    curl: "curl -fsSL https://raw.githubusercontent.com/alex-on-ai/WebReaper/master/scripts/install.sh | sh",
     nuget: "dotnet add package WebReaper",
   },
   links: {
-    github: "https://github.com/pavlovtech/WebReaper",
+    github: "https://github.com/alex-on-ai/WebReaper",
     nuget: "https://www.nuget.org/packages/WebReaper",
-    discussions: "https://github.com/pavlovtech/WebReaper/discussions",
-    issues: "https://github.com/pavlovtech/WebReaper/issues",
-    license: "https://github.com/pavlovtech/WebReaper/blob/master/LICENSE.txt",
+    discussions: "https://github.com/alex-on-ai/WebReaper/discussions",
+    issues: "https://github.com/alex-on-ai/WebReaper/issues",
+    license: "https://github.com/alex-on-ai/WebReaper/blob/master/LICENSE.txt",
   },
   contactEmail: "business@highcraft.io",
   nav: [
@@ -47,10 +47,10 @@ export const siteConfig = {
     {
       title: "Open source",
       links: [
-        { title: "GitHub", href: "https://github.com/pavlovtech/WebReaper" },
+        { title: "GitHub", href: "https://github.com/alex-on-ai/WebReaper" },
         { title: "NuGet", href: "https://www.nuget.org/packages/WebReaper" },
-        { title: "Discussions", href: "https://github.com/pavlovtech/WebReaper/discussions" },
-        { title: "Report an issue", href: "https://github.com/pavlovtech/WebReaper/issues" },
+        { title: "Discussions", href: "https://github.com/alex-on-ai/WebReaper/discussions" },
+        { title: "Report an issue", href: "https://github.com/alex-on-ai/WebReaper/issues" },
       ],
     },
     {

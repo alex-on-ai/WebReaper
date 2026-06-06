@@ -21,7 +21,7 @@ An additive release: a new Streamable HTTP MCP server so URL-based clients (n8n,
 - **`WEBREAPER_CDP_URL` browser sidecar ([ADR-0086]).** A `browser=true` MCP call now connects to an external CDP endpoint (a shared Chromium / browserless pool) when `WEBREAPER_CDP_URL` is set, instead of launching managed Chromium; `WEBREAPER_MCP_MAX_CONCURRENT_BROWSERS` caps concurrent launches. The selection lives in the shared satellite, so the stdio server gains the sidecar option too.
 - **Per-call model on `extract_with_prompt` ([ADR-0086]).** The tool gains an optional `model` parameter overriding `WEBREAPER_LLM_MODEL` for that one call; the API key stays environment-only, never a tool argument.
 
-The container image publishes to `ghcr.io/pavlovtech/webreaper-mcp-http` (tagged with the version and `latest`) on each release.
+The container image publishes to `ghcr.io/alex-on-ai/webreaper-mcp-http` (tagged with the version and `latest`) on each release.
 
 All 15 packages ship at 11.2.0 (lockstep).
 

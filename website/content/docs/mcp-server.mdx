@@ -25,19 +25,22 @@ Both servers expose WebReaper's core operations as MCP tools:
 - `map` a site to discover its URLs
 - `extract` structured data with a JSON schema
 - `extract_with_prompt` structured data by a natural-language prompt, with an LLM
+- `extract_inferred` structured data with no schema: an LLM infers the schema once, then WebReaper extracts deterministically (cheaper and more consistent than a prompt across similarly shaped pages)
 - `crawl` a whole site: a bounded on-domain sweep returning one Markdown record per page
 
-The `extract_with_prompt` tool calls an LLM, so it needs an OpenAI-compatible
-endpoint configured on the MCP host: set `WEBREAPER_LLM_MODEL` and
-`WEBREAPER_LLM_BASE_URL` (for example `https://api.openai.com/v1`, or
+The `extract_with_prompt` and `extract_inferred` tools call an LLM, so they need
+an OpenAI-compatible endpoint configured on the MCP host: set `WEBREAPER_LLM_MODEL`
+and `WEBREAPER_LLM_BASE_URL` (for example `https://api.openai.com/v1`, or
 `http://localhost:11434/v1` for a local Ollama), with the API key in
-`WEBREAPER_LLM_API_KEY` (or `OPENAI_API_KEY`). It also takes an optional per-call
+`WEBREAPER_LLM_API_KEY` (or `OPENAI_API_KEY`). Both take an optional per-call
 `model` parameter that overrides `WEBREAPER_LLM_MODEL` for that one call. The
 other tools need no setup.
 
-`crawl` is a single long **blocking** call with no progress feedback, bounded by
-`maxPages` (default 50, hard cap 1000). For a large site, prefer `map` to list
-the URLs and then `scrape` each, so every call stays short.
+`crawl` is a single long **blocking** call bounded by `maxPages` (default 50,
+hard cap 1000). It emits MCP progress notifications per page for clients that
+render them (Claude Desktop, Cursor); a blocking client like n8n just waits for
+the result. For a large site, prefer `map` to list the URLs and then `scrape`
+each, so every call stays short.
 
 ## Use it with n8n
 

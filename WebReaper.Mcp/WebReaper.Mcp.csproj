@@ -48,4 +48,10 @@
     <None Include="..\WebReaper\logo.png" Pack="true" PackagePath="\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- ADR-0086: the progress-observer adapter is internal glue; the unit
+         tests for its climb-step -> MCP-progress translation live next door. -->
+    <InternalsVisibleTo Include="WebReaper.Mcp.AspNetCore.Tests" />
+  </ItemGroup>
+
 </Project>

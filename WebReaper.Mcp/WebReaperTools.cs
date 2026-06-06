@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text;
 using System.Text.Json.Nodes;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using WebReaper.AI;
 using WebReaper.AI.Http;
@@ -25,7 +26,8 @@ public static class WebReaperTools
         "into context.")]
     public static async Task<string> Scrape(
         [Description("The URL to scrape.")] string url,
-        [Description("Use the headless browser (for JS-rendered pages). Auto-spawns a system Chrome / Chromium / Edge via WebReaper.Cdp; install a Chromium-family browser on the MCP host first. Default false.")] bool browser = false)
+        [Description("Use the headless browser (for JS-rendered pages). Auto-spawns a system Chrome / Chromium / Edge via WebReaper.Cdp; install a Chromium-family browser on the MCP host first. Default false.")] bool browser = false,
+        IProgress<ProgressNotificationValue>? progress = null)
     {
         if (string.IsNullOrWhiteSpace(url))
             throw new ArgumentException("URL is required.", nameof(url));
@@ -41,7 +43,8 @@ public static class WebReaperTools
 
         // ADR-0073 / ADR-0086: browser=true launches managed Chromium, or
         // connects to WEBREAPER_CDP_URL (a shared browser sidecar) when set.
-        await RunBrowserAwareAsync(builder, browser);
+        // ADR-0085: surface the load/climb as MCP progress (single page).
+        await RunBrowserAwareAsync(builder, browser, progress, total: 1);
 
         var output = new StringBuilder();
         foreach (var record in records)
@@ -84,7 +87,8 @@ public static class WebReaperTools
     public static async Task<string> Extract(
         [Description("The URL to extract from.")] string url,
         [Description("The extraction schema as JSON. See the WebReaper docs for the shape.")] string schemaJson,
-        [Description("Use the headless browser. Auto-spawns a system Chrome / Chromium / Edge via WebReaper.Cdp; install a Chromium-family browser on the MCP host first. Default false.")] bool browser = false)
+        [Description("Use the headless browser. Auto-spawns a system Chrome / Chromium / Edge via WebReaper.Cdp; install a Chromium-family browser on the MCP host first. Default false.")] bool browser = false,
+        IProgress<ProgressNotificationValue>? progress = null)
     {
         if (string.IsNullOrWhiteSpace(url))
             throw new ArgumentException("URL is required.", nameof(url));
@@ -112,7 +116,7 @@ public static class WebReaperTools
             .StopWhenAllLinksProcessed();
 
         // ADR-0086: see Scrape() for the browser-wiring rationale.
-        await RunBrowserAwareAsync(builder, browser);
+        await RunBrowserAwareAsync(builder, browser, progress, total: 1);
 
         // JSON Lines: one record per line.
         return string.Join("\n", records.Select(r => r.Data.ToJsonString()));
@@ -130,7 +134,8 @@ public static class WebReaperTools
         [Description("The URL to extract from.")] string url,
         [Description("Natural-language description of the data to extract.")] string prompt,
         [Description("Use the headless browser (for JS-rendered pages). Auto-spawns a system Chrome / Chromium / Edge via WebReaper.Cdp. Default false.")] bool browser = false,
-        [Description("Optional model id, overriding WEBREAPER_LLM_MODEL for this call (e.g. gpt-4o-mini). The API key is never a parameter; it stays in the environment.")] string? model = null)
+        [Description("Optional model id, overriding WEBREAPER_LLM_MODEL for this call (e.g. gpt-4o-mini). The API key is never a parameter; it stays in the environment.")] string? model = null,
+        IProgress<ProgressNotificationValue>? progress = null)
     {
         if (string.IsNullOrWhiteSpace(url))
             throw new ArgumentException("URL is required.", nameof(url));
@@ -151,7 +156,7 @@ public static class WebReaperTools
             .StopWhenAllLinksProcessed();
 
         // ADR-0086: see Scrape() for the browser-wiring rationale.
-        await RunBrowserAwareAsync(builder, browser);
+        await RunBrowserAwareAsync(builder, browser, progress, total: 1);
 
         return string.Join("\n", records.Select(r => r.Data.ToJsonString()));
     }
@@ -159,13 +164,16 @@ public static class WebReaperTools
     [McpServerTool(Name = "crawl"), Description(
         "Crawl a whole site: recursively follow on-domain links from the start URL "
         + "and return one Markdown record per page as JSON Lines. WARNING: this is a "
-        + "single long BLOCKING call with NO progress feedback, bounded by max_pages "
-        + "(default 50, hard cap 1000). For a large site prefer 'map' to list URLs, "
-        + "then 'scrape' each URL, so every call stays short and you keep per-URL control.")]
+        + "single long BLOCKING call, bounded by max_pages (default 50, hard cap 1000). "
+        + "It emits MCP progress notifications per page for clients that render them "
+        + "(e.g. Claude Desktop); blocking clients like n8n just wait for the result. "
+        + "For a large site prefer 'map' to list URLs, then 'scrape' each URL, so every "
+        + "call stays short and you keep per-URL control.")]
     public static async Task<string> Crawl(
         [Description("The site root URL to crawl.")] string url,
         [Description("Maximum pages to sweep. Default 50, hard cap 1000.")] int maxPages = CrawlBounds.DefaultMaxPages,
-        [Description("Use the headless browser for each page (JS-rendered sites). Default false.")] bool browser = false)
+        [Description("Use the headless browser for each page (JS-rendered sites). Default false.")] bool browser = false,
+        IProgress<ProgressNotificationValue>? progress = null)
     {
         if (string.IsNullOrWhiteSpace(url))
             throw new ArgumentException("URL is required.", nameof(url));
@@ -185,18 +193,62 @@ public static class WebReaperTools
             .Subscribe(r => { lock (records) records.Add(r); })
             .StopWhenAllLinksProcessed();
 
-        await RunBrowserAwareAsync(builder, browser);
+        // ADR-0085: per-page climb steps become MCP progress (total = the cap).
+        await RunBrowserAwareAsync(builder, browser, progress, total: cap);
 
         // JSON Lines: one record per swept page.
+        return string.Join("\n", records.Select(r => r.Data.ToJsonString()));
+    }
+
+    [McpServerTool(Name = "extract_inferred"), Description(
+        "Extract structured data from a URL WITHOUT writing a schema: an LLM infers the "
+        + "schema from the page (optionally steered by a goal), then WebReaper extracts "
+        + "deterministically. Cheaper and more consistent than extract_with_prompt across "
+        + "similarly shaped pages. Requires an OpenAI-compatible LLM endpoint on the host: "
+        + "WEBREAPER_LLM_MODEL + WEBREAPER_LLM_BASE_URL, key in WEBREAPER_LLM_API_KEY (or "
+        + "OPENAI_API_KEY). Returns the extracted record(s) as JSON Lines.")]
+    public static async Task<string> ExtractInferred(
+        [Description("The URL to extract from.")] string url,
+        [Description("Optional goal to steer the inferred schema (e.g. \"product name and price\").")] string? goal = null,
+        [Description("Use the headless browser (for JS-rendered pages). Default false.")] bool browser = false,
+        [Description("Optional model id, overriding WEBREAPER_LLM_MODEL for this call.")] string? model = null,
+        IProgress<ProgressNotificationValue>? progress = null)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            throw new ArgumentException("URL is required.", nameof(url));
+
+        using var chatClient = CreateChatClient(model);
+
+        var seed = browser
+            ? ScraperEngineBuilder.CrawlWithBrowser(url)
+            : ScraperEngineBuilder.Crawl(url);
+
+        var records = new List<ParsedData>();
+        // ADR-0067: infer a Schema once with the LLM, then run the deterministic fold.
+        var builder = seed.ExtractInferred(goal)
+            .WithLlmSchemaInferrer(chatClient)
+            .Subscribe(records.Add)
+            .StopWhenAllLinksProcessed();
+
+        await RunBrowserAwareAsync(builder, browser, progress, total: 1);
+
         return string.Join("\n", records.Select(r => r.Data.ToJsonString()));
     }
 
     // ADR-0086: resolve the browser plan (launch vs connect-to-CDP-url), apply
     // it, and run the engine. Managed-Chromium launches pass through a
     // concurrency gate; connect / HTTP calls do not. `await using` tears the
-    // engine (and any spawned Chromium) down on completion (ADR-0058).
-    private static async Task RunBrowserAwareAsync(ScraperEngineBuilder builder, bool browser)
+    // engine (and any spawned Chromium) down on completion (ADR-0058). When the
+    // MCP client requested progress (ADR-0085), forward climb steps to it.
+    private static async Task RunBrowserAwareAsync(
+        ScraperEngineBuilder builder,
+        bool browser,
+        IProgress<ProgressNotificationValue>? progress = null,
+        int? total = null)
     {
+        if (progress is not null)
+            builder = builder.WithClimbObserver(new McpProgressClimbObserver(progress, total));
+
         var plan = BrowserTransport.Select(
             browser, Environment.GetEnvironmentVariable(BrowserTransport.CdpUrlEnvVar));
         builder = builder.ApplyBrowser(plan);

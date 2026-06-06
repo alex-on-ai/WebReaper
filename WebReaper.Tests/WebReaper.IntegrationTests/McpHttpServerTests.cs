@@ -50,6 +50,9 @@ public sealed class McpHttpServerTests
             Assert.Contains("scrape", names);
             Assert.Contains("map", names);
             Assert.Contains("extract", names);
+            Assert.Contains("extract_with_prompt", names);
+            Assert.Contains("crawl", names);
+            Assert.Contains("extract_inferred", names);
         }
     }
 

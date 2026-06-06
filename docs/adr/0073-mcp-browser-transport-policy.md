@@ -2,7 +2,7 @@
 
 ## Status
 
-**Accepted**. Follow-through to [PR #122](https://github.com/pavlovtech/WebReaper/pull/122),
+**Accepted**. Follow-through to [PR #122](https://github.com/alex-on-ai/WebReaper/pull/122),
 which fixed only the stale tool description; the wiring fix was deferred
 to its own ADR + slice. v10.0.2 patch.
 

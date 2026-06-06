@@ -552,7 +552,7 @@ jobs:
 
   homebrew-publish:
     # ADR-0070 §1: render Formula/webreaper.rb from the template in this
-    # repo, push to pavlovtech/homebrew-webreaper using a tap-scoped
+    # repo, push to alex-on-ai/homebrew-webreaper using a tap-scoped
     # fine-grained PAT (GH_TOKEN_HOMEBREW_TAP). Runs after `checksums`
     # because it reads SHA256 values from SHA256SUMS.
     #
@@ -621,7 +621,7 @@ jobs:
           echo "--- rendered Formula/webreaper.rb ---"
           cat webreaper.rb
 
-      - name: Push to pavlovtech/homebrew-webreaper
+      - name: Push to alex-on-ai/homebrew-webreaper
         env:
           GH_TOKEN_HOMEBREW_TAP: ${{ secrets.GH_TOKEN_HOMEBREW_TAP }}
         run: |
@@ -631,7 +631,7 @@ jobs:
           VERSION="${{ needs.pack.outputs.version }}"
 
           git clone --depth 1 \
-            "https://x-access-token:${GH_TOKEN_HOMEBREW_TAP}@github.com/pavlovtech/homebrew-webreaper.git" \
+            "https://x-access-token:${GH_TOKEN_HOMEBREW_TAP}@github.com/alex-on-ai/homebrew-webreaper.git" \
             tap
           mkdir -p tap/Formula
           cp webreaper.rb tap/Formula/webreaper.rb

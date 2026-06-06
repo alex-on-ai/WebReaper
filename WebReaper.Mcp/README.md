@@ -1,6 +1,6 @@
 # WebReaper.Mcp
 
-MCP (Model Context Protocol) server satellite for [WebReaper](https://github.com/pavlovtech/WebReaper).
+MCP (Model Context Protocol) server satellite for [WebReaper](https://github.com/alex-on-ai/WebReaper).
 
 The agent client (Cursor / Claude Desktop / Copilot Studio) spawns
 this binary and communicates over stdio. Three tools:

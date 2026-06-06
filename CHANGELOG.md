@@ -182,8 +182,8 @@ Semver: additive (a new CLI verb, a new library method, a new selector factory, 
 
 This release also folds in two fixes merged since 10.1.0:
 
-- **CLI accepts bare-host URLs** ([#162](https://github.com/pavlovtech/WebReaper/pull/162)): `webreaper scrape example.com` now defaults a missing scheme to `https://` at the argument boundary, instead of failing with "An invalid request URI was provided".
-- **Build-warnings cleanup** ([#161](https://github.com/pavlovtech/WebReaper/pull/161)): the xUnit1031, Node20-artifact, retention-days, and NU5128 warnings are cleared.
+- **CLI accepts bare-host URLs** ([#162](https://github.com/alex-on-ai/WebReaper/pull/162)): `webreaper scrape example.com` now defaults a missing scheme to `https://` at the argument boundary, instead of failing with "An invalid request URI was provided".
+- **Build-warnings cleanup** ([#161](https://github.com/alex-on-ai/WebReaper/pull/161)): the xUnit1031, Node20-artifact, retention-days, and NU5128 warnings are cleared.
 
 ## 10.1.0: form-interaction page actions, MCP browser mode, and post-launch refactors
 
@@ -221,7 +221,7 @@ The `LlmActionResolver` whitelist extends from four shapes to seven; the brain r
 
 ### `WebReaper.Mcp` browser mode wired (ADR-0073)
 
-Patch fix to a behaviour gap noted but deferred in [PR #122](https://github.com/pavlovtech/WebReaper/pull/122). The MCP satellite's `scrape` and `extract` tools accept a `browser=true` parameter that flips the seed to `ScraperEngineBuilder.CrawlWithBrowser(url)`, but `WebReaper.Mcp.csproj` did not `ProjectReference` any browser-transport satellite, so the first dynamic page load hit the core's `BrowserNotConfiguredPageLoadTransport` error. The parameter was structurally unwired.
+Patch fix to a behaviour gap noted but deferred in [PR #122](https://github.com/alex-on-ai/WebReaper/pull/122). The MCP satellite's `scrape` and `extract` tools accept a `browser=true` parameter that flips the seed to `ScraperEngineBuilder.CrawlWithBrowser(url)`, but `WebReaper.Mcp.csproj` did not `ProjectReference` any browser-transport satellite, so the first dynamic page load hit the core's `BrowserNotConfiguredPageLoadTransport` error. The parameter was structurally unwired.
 
 [ADR-0073](docs/adr/0073-mcp-browser-transport-policy.md) records the wiring decision: `WebReaper.Mcp` bakes `WebReaper.Cdp` (ADR-0052), mirroring the CLI's ADR-0055 precedent. `Microsoft.Playwright` and `WebReaper.Stealth.*` stay out of the satellite's dependency graph; consistency across both agent-facing satellites carries the convention.
 

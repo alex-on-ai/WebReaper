@@ -213,10 +213,10 @@ Exit code `0` on success, non-zero on failure. Errors print one human-readable
 line to stderr. Common cases:
 
 - **`webreaper: command not found`** → not installed. Instruct the user:
-  - **macOS / Linux**: `brew install pavlovtech/webreaper/webreaper`, or
-    `curl -fsSL https://raw.githubusercontent.com/pavlovtech/WebReaper/master/scripts/install.sh | sh`
+  - **macOS / Linux**: `brew install alex-on-ai/webreaper/webreaper`, or
+    `curl -fsSL https://raw.githubusercontent.com/alex-on-ai/WebReaper/master/scripts/install.sh | sh`
   - **Windows**: download the latest archive for `win-x64` (or `win-arm64`)
-    from <https://github.com/pavlovtech/WebReaper/releases/latest>, extract
+    from <https://github.com/alex-on-ai/WebReaper/releases/latest>, extract
     `webreaper.exe`, place on `%PATH%`.
 - **`⚠ N page(s) still blocked at the top tier …` on stderr (non-zero exit)** →
   the loader climbed to its top tier and the page was still a challenge. Add the

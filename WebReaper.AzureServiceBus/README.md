@@ -1,7 +1,7 @@
 # WebReaper.AzureServiceBus
 
 Azure Service Bus scheduler for
-[WebReaper](https://github.com/pavlovtech/WebReaper): a distributed job queue
+[WebReaper](https://github.com/alex-on-ai/WebReaper): a distributed job queue
 backed by an Azure Service Bus queue, for sharing crawl state across workers
 and serverless functions.
 

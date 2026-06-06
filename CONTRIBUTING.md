@@ -64,7 +64,7 @@ don't need an ADR.
 
 ## Reporting bugs
 
-Bugs are tracked as [GitHub Issues](https://github.com/pavlovtech/WebReaper/issues).
+Bugs are tracked as [GitHub Issues](https://github.com/alex-on-ai/WebReaper/issues).
 A good bug report includes:
 
 - A clear, descriptive title.
@@ -77,7 +77,7 @@ A good bug report includes:
 
 ## Suggesting enhancements
 
-Enhancement suggestions are also [GitHub Issues](https://github.com/pavlovtech/WebReaper/issues).
+Enhancement suggestions are also [GitHub Issues](https://github.com/alex-on-ai/WebReaper/issues).
 A good enhancement suggestion includes:
 
 - A clear description of the use case.

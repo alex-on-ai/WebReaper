@@ -1,6 +1,6 @@
 # WebReaper.Redis
 
-Redis adapters for [WebReaper](https://github.com/pavlovtech/WebReaper): a
+Redis adapters for [WebReaper](https://github.com/alex-on-ai/WebReaper): a
 distributed scheduler, visited-link tracker, result sink, and Redis-backed
 scraper-config and cookie storage. Swapping the scheduler + config storage +
 link tracker to Redis lets multiple workers share crawl state.

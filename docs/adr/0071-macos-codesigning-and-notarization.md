@@ -273,7 +273,7 @@ For raw Mach-O CLI binaries, stapling is unsupported by design.
 
 ### Fix (PR #131)
 
-[PR #131](https://github.com/pavlovtech/WebReaper/pull/131) (merged
+[PR #131](https://github.com/alex-on-ai/WebReaper/pull/131) (merged
 2026-05-26, folded into the v10.0.0 launch on 2026-05-27) dropped the
 `xcrun stapler staple` step **and** the `spctl -a -t exec -vvv` verify
 step from both `osx-arm64` and `osx-x64` matrix arms of `release.yml`.

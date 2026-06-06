@@ -1,6 +1,6 @@
 # WebReaper.Cosmos
 
-Azure Cosmos DB sink for [WebReaper](https://github.com/pavlovtech/WebReaper).
+Azure Cosmos DB sink for [WebReaper](https://github.com/alex-on-ai/WebReaper).
 
 Satellite package (ADR-0009): the Cosmos sink is kept out of the WebReaper
 core so the core stays dependency-light and Native-AOT-clean. The Cosmos SDK

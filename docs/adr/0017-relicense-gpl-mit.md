@@ -157,7 +157,7 @@ git filter-repo --force \
   'return b"alexppavlov93@gmail.com" if b"olpavlov@<old-employer>.com" in email else email'
 
 # Re-add origin (filter-repo strips it as a safety default)
-git remote add origin https://github.com/pavlovtech/WebReaper.git
+git remote add origin https://github.com/alex-on-ai/WebReaper.git
 
 # Force-push rewritten master + all tags (release tags' SHAs moved)
 git push origin master --force

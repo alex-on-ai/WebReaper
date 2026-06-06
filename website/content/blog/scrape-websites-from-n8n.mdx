@@ -1,0 +1,99 @@
+---
+title: "Scrape any website from your n8n workflows"
+description: WebReaper now speaks MCP over HTTP, so n8n's MCP Client node can scrape, crawl, and extract from any site, including JS-rendered and bot-protected ones, right inside a workflow.
+date: 2026-06-05
+author: WebReaper Team
+tags:
+  - announcement
+  - n8n
+  - mcp
+---
+
+n8n is great at moving data between APIs. It is not great at scraping the open
+web: the HTTP Request node returns raw HTML, does not run JavaScript, and gets
+turned away by Cloudflare or DataDome. So the moment a workflow needs the
+readable content of a page, or structured fields from a site that fights back,
+you are stuck gluing together a headless browser somewhere else.
+
+WebReaper now closes that gap. As of v11.2.0 it ships a **Streamable HTTP MCP
+server**, and n8n's MCP Client node speaks exactly that. Point n8n at a running
+WebReaper server and your workflows get five scraping tools, including
+JS-rendering and auto-escalating stealth, with no browser code of your own.
+
+## Run the server
+
+The container bakes a headless Chromium, so JS-rendered pages work out of the
+box:
+
+```bash
+docker run -p 8080:8080 -e WEBREAPER_MCP_TOKEN=your-secret \
+  ghcr.io/pavlovtech/webreaper-mcp-http:latest
+```
+
+`WEBREAPER_MCP_TOKEN` is required: the server refuses to start on a public
+interface without one, so you never accidentally expose an open scraper. Keep
+that token; n8n sends it as a bearer credential.
+
+If you run n8n in Docker too, drop both into one `docker-compose` file so they
+share a network. There is a ready-made example in the repo under
+`WebReaper.Mcp.AspNetCore/docker-compose.example.yml`.
+
+## Wire it into n8n
+
+Add an **MCP Client** node to your workflow (or an **MCP Client Tool** node if
+you are attaching it to an AI Agent). Configure three fields:
+
+- **Server Transport**: `HTTP Streamable`
+- **MCP Endpoint URL**: your server URL. Use `http://host.docker.internal:8080`
+  when n8n runs in Docker on the same host, `http://webreaper-mcp:8080` on a
+  shared compose network, or `http://localhost:8080` for a native n8n.
+- **Authentication**: `Bearer`, with the value of your `WEBREAPER_MCP_TOKEN`.
+
+n8n fetches the tool list automatically. Pick a tool, set its inputs, and run.
+
+To skip the clicks, import this starter workflow (a manual trigger that scrapes
+one URL to Markdown) and set your URL and token after import:
+
+[Download the starter workflow](/n8n/webreaper-scrape-workflow.json)
+
+The node landed in recent n8n; if your version shows it as unrecognized, add the
+MCP Client node by hand with the three settings above.
+
+## The five tools
+
+- **scrape** a page to clean, LLM-ready Markdown.
+- **map** a site to discover its URLs (sitemap plus on-page links).
+- **extract** structured fields with a CSS-selector JSON schema.
+- **extract_with_prompt** structured data by a plain-language instruction, with
+  an LLM (set `WEBREAPER_LLM_*` on the server).
+- **crawl** a whole site: a bounded on-domain sweep, one Markdown record per page.
+
+Two patterns cover most workflows. For a known set of pages, call **map**, fan
+the URLs out with a Loop node, and **scrape** each. For "find and read whatever
+is relevant," attach the MCP Client Tool node to an **AI Agent** and let it call
+the tools itself.
+
+## Why route scraping through WebReaper
+
+Every tool runs on WebReaper's loader, so an n8n workflow inherits the parts that
+are painful to build yourself:
+
+- **JS-rendered pages**: set `browser: true` and the baked Chromium renders the
+  page before extraction.
+- **Bot protection**: a plain fetch auto-climbs HTTP to a browser on a detected
+  block (Cloudflare, DataDome, PerimeterX). For a shared browser pool, point
+  `WEBREAPER_CDP_URL` at a browserless sidecar.
+- **Clean output**: Markdown and structured JSON, not raw HTML you have to parse
+  in a Function node.
+
+One note on `crawl`: it is a single long call with no progress feedback, bounded
+to 50 pages by default. For a large site, prefer the map-then-scrape pattern so
+each step stays short.
+
+## Get started
+
+- [MCP server docs](https://webreaper.ai/docs/mcp-server)
+- [Getting started](https://webreaper.ai/docs/getting-started)
+
+It is free and MIT-licensed. Run the container, wire the node, and your n8n
+workflows can read the web.

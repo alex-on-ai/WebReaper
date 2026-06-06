@@ -1,5 +1,17 @@
 # Changelog
 
+## 11.3.0: MCP progress + schema-free extraction (extract_inferred)
+
+An additive release for the MCP servers. No breaking changes, no API removals.
+
+- **Progress over MCP ([ADR-0085]).** The `scrape`, `extract`, `extract_with_prompt`, `crawl`, and `extract_inferred` tools now forward the escalating loader's climb steps to MCP progress notifications. Interactive MCP clients (Claude Desktop, Cursor) render live per-page and per-climb progress during a long call. A blocking client like n8n does not surface these and just waits for the result, so the long-crawl mitigations there remain the `maxPages` cap and the map-then-scrape pattern.
+- **New `extract_inferred` MCP tool ([ADR-0067]).** Extract structured data from a URL with no schema: an LLM infers the schema once (optionally steered by a goal), then WebReaper extracts deterministically. Cheaper and more consistent than `extract_with_prompt` across similarly shaped pages. Same OpenAI-compatible LLM config as `extract_with_prompt` (`WEBREAPER_LLM_*`), with an optional per-call `model` override. Both MCP servers (stdio and HTTP) now expose six tools.
+
+All 15 packages ship at 11.3.0 (lockstep).
+
+[ADR-0085]: docs/adr/0085-climb-progress-observer-seam.md
+[ADR-0067]: docs/adr/0067-schema-inferrer-seam.md
+
 ## 11.2.0: MCP server over HTTP (n8n and remote clients)
 
 An additive release: a new Streamable HTTP MCP server so URL-based clients (n8n, hosted agents) can reach WebReaper, plus a CDP-sidecar option and a bounded crawl tool that both MCP servers gain. No breaking changes, no API removals.

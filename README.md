@@ -174,7 +174,7 @@ Two MCP servers expose the same tools (`scrape`, `map`, `extract`, `extract_with
 
   ```bash
   docker run -p 8080:8080 -e WEBREAPER_MCP_TOKEN=your-secret \
-    ghcr.io/pavlovtech/webreaper-mcp-http:latest
+    ghcr.io/alex-on-ai/webreaper-mcp-http:latest
   ```
 
   See the [n8n quickstart](docs/mcp-http-quickstart.md).
@@ -308,7 +308,7 @@ The release ships fifteen packages (one core, fourteen satellites), all versione
 | **WebReaper.Extraction.Attributes** | The `[ScrapeSchema]` / `[ScrapeField]` marker types. Standalone, no runtime cost. | `[ScrapeSchema]` `[ScrapeField("selector")]` |
 | **WebReaper.Extraction.Generators** | Roslyn source generator that emits `static Schema` plus reflection-free `static Materialize(JsonObject)` (ADR-0045). `DevelopmentDependency=true`; does not propagate at runtime. | compile-time only |
 | **WebReaper.Mcp** | MCP server `Exe` exposing scrape / map / extract / extract_with_prompt / extract_inferred / crawl as MCP tools over **stdio** (ADR-0049). Interop adapter for local MCP clients (Cursor, Claude Desktop). | the package _is_ the executable |
-| **WebReaper.Mcp.AspNetCore** | MCP server over **Streamable HTTP** (ADR-0086) for URL-based clients like n8n; same tools as `WebReaper.Mcp`, plus bearer-token auth and a `WEBREAPER_CDP_URL` browser sidecar. Also ships as a Chromium-baked container image. | the package _is_ the executable; or `docker run ghcr.io/pavlovtech/webreaper-mcp-http` |
+| **WebReaper.Mcp.AspNetCore** | MCP server over **Streamable HTTP** (ADR-0086) for URL-based clients like n8n; same tools as `WebReaper.Mcp`, plus bearer-token auth and a `WEBREAPER_CDP_URL` browser sidecar. Also ships as a Chromium-baked container image. | the package _is_ the executable; or `docker run ghcr.io/alex-on-ai/webreaper-mcp-http` |
 | **WebReaper.Mongo** | MongoDB result sink and MongoDB-backed config / cookie storage. | `.WriteToMongoDb(...)` `.WithMongoDbConfigStorage(...)` `.WithMongoDbCookieStorage(...)` |
 | **WebReaper.Redis** | Redis scheduler, visited-link tracker, result sink, config / cookie storage. | `.WithRedisScheduler(...)` `.TrackVisitedLinksInRedis(...)` `.WriteToRedis(...)` `.WithRedisConfigStorage(...)` `.WithRedisCookieStorage(...)` |
 | **WebReaper.AzureServiceBus** | Distributed scheduler over an Azure Service Bus queue. | `.WithAzureServiceBusScheduler(...)` |

@@ -157,6 +157,8 @@ Self-hosted, single binary, no cloud round-trip ([ADR-0083](docs/adr/0083-escala
 
 ## Power your agent
 
+Onboarding an agent from zero? Hand it [docs/AI-ONBOARDING.md](docs/AI-ONBOARDING.md) — install → verify → choose-your-path on one page, no credentials anywhere.
+
 ### Claude Code skill
 
 ```bash

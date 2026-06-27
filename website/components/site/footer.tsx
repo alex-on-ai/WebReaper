@@ -65,7 +65,16 @@ export function Footer() {
             © {new Date().getFullYear()} WebReaper. MIT licensed.
           </p>
           <p className="text-sm text-muted-2">
-            Built with WebReaper, Next.js, and Flowbite.
+            Built by{" "}
+            <a
+              href="https://highcraft.io"
+              target="_blank"
+              rel="noopener"
+              className="font-medium text-muted transition hover:text-foreground"
+            >
+              HighCraft.io
+            </a>{" "}
+            · Built with WebReaper, Next.js, and Flowbite.
           </p>
         </div>
       </div>

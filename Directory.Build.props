@@ -39,7 +39,7 @@
     <Company>Alex Pavlov</Company>
     <Product>WebReaper</Product>
     <Copyright>Copyright (c) Alex Pavlov</Copyright>
-    <PackageProjectUrl>https://github.com/alex-on-ai/WebReaper</PackageProjectUrl>
+    <PackageProjectUrl>https://webreaper.ai</PackageProjectUrl>
     <RepositoryUrl>https://github.com/alex-on-ai/WebReaper</RepositoryUrl>
     <!-- ADR-0017: relicensed to MIT to remove funnel-adoption friction.
          Per-csproj <PackageLicenseExpression>MIT</PackageLicenseExpression>

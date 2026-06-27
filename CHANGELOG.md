@@ -1,5 +1,16 @@
 # Changelog
 
+## 11.3.1: alex-on-ai canonicalization (metadata + branding)
+
+A metadata and branding patch that finishes the GitHub account rename from `pavlovtech` to `alex-on-ai`. No API changes; the one behavioural change is that the shipped CLI now resolves updates against the canonical `alex-on-ai` repo.
+
+- **Package metadata.** `PackageProjectUrl` now points at the product site `https://webreaper.ai` and `RepositoryUrl` at `https://github.com/alex-on-ai/WebReaper`; both previously pointed at the old `pavlovtech` org, which only redirects.
+- **Shipped CLI + core.** The CLI's self-update check and upgrade hint resolve against `alex-on-ai/WebReaper` releases, and the sitemap crawler's User-Agent embeds the `alex-on-ai` repo URL. Behaviour is unchanged (the old URLs redirect), now canonical.
+- **Release + install pipeline.** The Homebrew tap push target, the rendered formula's download URLs, and `install.sh` repoint to `alex-on-ai`; the MCP container image publishes to `ghcr.io/alex-on-ai/webreaper-mcp-http`.
+- **Docs + branding.** READMEs (core + satellites), the website, and the bundled Claude Code skill are canonicalized, a new AI-agent onboarding page is added, and a "Built by HighCraft.io" credit appears in the READMEs and the webreaper.ai footer.
+
+All 15 packages ship at 11.3.1 (lockstep).
+
 ## 11.3.0: MCP progress + schema-free extraction (extract_inferred)
 
 An additive release for the MCP servers. No breaking changes, no API removals.

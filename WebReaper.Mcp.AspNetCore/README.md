@@ -1,7 +1,7 @@
 # WebReaper.Mcp.AspNetCore
 
 A **Streamable HTTP** [MCP](https://modelcontextprotocol.io) server host for
-[WebReaper](https://github.com/pavlovtech/WebReaper). It exposes WebReaper's
+[WebReaper](https://github.com/alex-on-ai/WebReaper). It exposes WebReaper's
 scraping tools over HTTP so URL-based MCP clients (n8n, hosted agents) can
 reach them. Sibling to the stdio `WebReaper.Mcp` satellite; both expose the
 same tools (`scrape`, `map`, `extract`, `extract_with_prompt`, `crawl`).
@@ -18,11 +18,11 @@ dotnet run --project WebReaper.Mcp.AspNetCore
 ```
 
 The container image (Chromium baked in) is the recommended way to self-host.
-Each release publishes it to GHCR as `ghcr.io/pavlovtech/webreaper-mcp-http`:
+Each release publishes it to GHCR as `ghcr.io/alex-on-ai/webreaper-mcp-http`:
 
 ```bash
 docker run --rm -p 8080:8080 -e WEBREAPER_MCP_TOKEN=change-me \
-  ghcr.io/pavlovtech/webreaper-mcp-http:latest
+  ghcr.io/alex-on-ai/webreaper-mcp-http:latest
 # or build it: docker build -f WebReaper.Mcp.AspNetCore/Dockerfile -t webreaper-mcp-http .
 ```
 

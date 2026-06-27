@@ -17,7 +17,7 @@ namespace WebReaper.Core.Mapping;
 public sealed class SiteMapper : ISiteMapper
 {
     private const string UserAgent =
-        "Mozilla/5.0 (compatible; WebReaperSiteMapper/1.0; +https://github.com/pavlovtech/WebReaper)";
+        "Mozilla/5.0 (compatible; WebReaperSiteMapper/1.0; +https://github.com/alex-on-ai/WebReaper)";
 
     private static readonly XNamespace Sitemap = "http://www.sitemaps.org/schemas/sitemap/0.9";
 

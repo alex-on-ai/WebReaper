@@ -18,12 +18,12 @@ stdio satellite (one shared `WebReaperTools`).
 
 The image bakes a headless Chromium, so `browser=true` works out of the box.
 Each release publishes it to GHCR as
-`ghcr.io/pavlovtech/webreaper-mcp-http:<version>` (and `:latest`):
+`ghcr.io/alex-on-ai/webreaper-mcp-http:<version>` (and `:latest`):
 
 ```bash
 docker run --rm -p 8080:8080 \
   -e WEBREAPER_MCP_TOKEN=change-me-to-a-long-random-secret \
-  ghcr.io/pavlovtech/webreaper-mcp-http:latest
+  ghcr.io/alex-on-ai/webreaper-mcp-http:latest
 ```
 
 Or build it yourself (context = repo root):

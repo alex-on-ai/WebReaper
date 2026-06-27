@@ -1,6 +1,6 @@
 # WebReaper.Stealth.CloakBrowser
 
-[CloakBrowser](https://github.com/CloakHQ/CloakBrowser) stealth Chromium fork backend for [WebReaper](https://github.com/pavlovtech/WebReaper). One-liner `.WithCloakBrowser()` that finds (or downloads from upstream) the CloakBrowser binary, launches it with the fork's recommended flags, and wires its CDP endpoint into [`WebReaper.Cdp`](https://www.nuget.org/packages/WebReaper.Cdp).
+[CloakBrowser](https://github.com/CloakHQ/CloakBrowser) stealth Chromium fork backend for [WebReaper](https://github.com/alex-on-ai/WebReaper). One-liner `.WithCloakBrowser()` that finds (or downloads from upstream) the CloakBrowser binary, launches it with the fork's recommended flags, and wires its CDP endpoint into [`WebReaper.Cdp`](https://www.nuget.org/packages/WebReaper.Cdp).
 
 The first concrete satellite of the ADR-0054 stealth-backend pattern.
 
@@ -12,7 +12,7 @@ C++ source-level fingerprint patches make the browser indistinguishable from a r
 |---|---|
 | Cloudflare Turnstile, reCAPTCHA v3, FingerprintJS, BrowserScan | **Silent pass**; challenge never appears |
 | reCAPTCHA v2 image grid, hCaptcha (interactive puzzles) | Not handled by stealth; needs a separate captcha-solving service |
-| DataDome on aggressive sites | Partial; vendor recommends headed mode + residential proxies (use [`WithProxy(...)`](https://github.com/pavlovtech/WebReaper)) |
+| DataDome on aggressive sites | Partial; vendor recommends headed mode + residential proxies (use [`WithProxy(...)`](https://github.com/alex-on-ai/WebReaper)) |
 
 ## Install
 
@@ -58,8 +58,8 @@ See [BINARY-LICENSE.md](https://github.com/CloakHQ/CloakBrowser/blob/main/BINARY
     └── builder.WithCdpPageLoader(endpoint.CdpUrl)    → connects WebReaper.Cdp to the running browser
 ```
 
-Composes naturally with [`WithProxy(...)`](https://github.com/pavlovtech/WebReaper) (residential proxies for the hardest sites) and the LLM action resolver from `WebReaper.AI` (`.WithLlmActionResolver(...)`; semantic clicks like "dismiss popup" work through stealth).
+Composes naturally with [`WithProxy(...)`](https://github.com/alex-on-ai/WebReaper) (residential proxies for the hardest sites) and the LLM action resolver from `WebReaper.AI` (`.WithLlmActionResolver(...)`; semantic clicks like "dismiss popup" work through stealth).
 
 ## SemVer
 
-10.0.0 (initial release). See [ADR-0054](https://github.com/pavlovtech/WebReaper/blob/master/docs/adr/0054-stealth-backend-pattern-cloakbrowser.md) for the design.
+10.0.0 (initial release). See [ADR-0054](https://github.com/alex-on-ai/WebReaper/blob/master/docs/adr/0054-stealth-backend-pattern-cloakbrowser.md) for the design.

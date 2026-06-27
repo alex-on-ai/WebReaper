@@ -59,7 +59,7 @@ Nested `[ScrapeSchema]` types are explicitly deferred to a future version. The a
 
 ## See also
 
-- Main repo: [github.com/pavlovtech/WebReaper](https://github.com/pavlovtech/WebReaper)
+- Main repo: [github.com/alex-on-ai/WebReaper](https://github.com/alex-on-ai/WebReaper)
 - The attributes: [`WebReaper.Extraction.Attributes`](https://www.nuget.org/packages/WebReaper.Extraction.Attributes)
-- Design: [ADR-0045](https://github.com/pavlovtech/WebReaper/blob/master/docs/adr/0045-scrape-schema-source-generator.md)
-- License: [MIT](https://github.com/pavlovtech/WebReaper/blob/master/LICENSE.txt)
+- Design: [ADR-0045](https://github.com/alex-on-ai/WebReaper/blob/master/docs/adr/0045-scrape-schema-source-generator.md)
+- License: [MIT](https://github.com/alex-on-ai/WebReaper/blob/master/LICENSE.txt)

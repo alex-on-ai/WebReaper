@@ -1,6 +1,6 @@
 # Homebrew formula template (ADR-0070).
 #
-# Rendered into the pavlovtech/homebrew-webreaper tap repo by the
+# Rendered into the alex-on-ai/homebrew-webreaper tap repo by the
 # `homebrew-publish` job in this repo's .github/workflows/release.yml,
 # after `cli-publish` succeeds. Placeholders are sed-substituted:
 #
@@ -17,28 +17,28 @@
 
 class Webreaper < Formula
   desc "Declarative .NET web scraper / crawler: AI-native CLI"
-  homepage "https://github.com/pavlovtech/WebReaper"
+  homepage "https://github.com/alex-on-ai/WebReaper"
   version "{{VERSION}}"
   license "MIT"
 
   on_macos do
     on_arm do
-      url "https://github.com/pavlovtech/WebReaper/releases/download/{{TAG}}/webreaper-{{TAG}}-osx-arm64.zip"
+      url "https://github.com/alex-on-ai/WebReaper/releases/download/{{TAG}}/webreaper-{{TAG}}-osx-arm64.zip"
       sha256 "{{SHA256_OSX_ARM64}}"
     end
     on_intel do
-      url "https://github.com/pavlovtech/WebReaper/releases/download/{{TAG}}/webreaper-{{TAG}}-osx-x64.zip"
+      url "https://github.com/alex-on-ai/WebReaper/releases/download/{{TAG}}/webreaper-{{TAG}}-osx-x64.zip"
       sha256 "{{SHA256_OSX_X64}}"
     end
   end
 
   on_linux do
     on_intel do
-      url "https://github.com/pavlovtech/WebReaper/releases/download/{{TAG}}/webreaper-{{TAG}}-linux-x64.tar.gz"
+      url "https://github.com/alex-on-ai/WebReaper/releases/download/{{TAG}}/webreaper-{{TAG}}-linux-x64.tar.gz"
       sha256 "{{SHA256_LINUX_X64}}"
     end
     on_arm do
-      url "https://github.com/pavlovtech/WebReaper/releases/download/{{TAG}}/webreaper-{{TAG}}-linux-arm64.tar.gz"
+      url "https://github.com/alex-on-ai/WebReaper/releases/download/{{TAG}}/webreaper-{{TAG}}-linux-arm64.tar.gz"
       sha256 "{{SHA256_LINUX_ARM64}}"
     end
   end

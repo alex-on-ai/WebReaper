@@ -1,6 +1,6 @@
 # WebReaper.Cdp
 
-Raw [Chrome DevTools Protocol](https://chromedevtools.github.io/devtools-protocol/) `IPageLoadTransport` for [WebReaper](https://github.com/pavlovtech/WebReaper); the **AOT-clean** browser transport, the bedrock for stealth Chromium fork backends (see [WebReaper.Stealth.CloakBrowser](https://www.nuget.org/packages/WebReaper.Stealth.CloakBrowser)).
+Raw [Chrome DevTools Protocol](https://chromedevtools.github.io/devtools-protocol/) `IPageLoadTransport` for [WebReaper](https://github.com/alex-on-ai/WebReaper); the **AOT-clean** browser transport, the bedrock for stealth Chromium fork backends (see [WebReaper.Stealth.CloakBrowser](https://www.nuget.org/packages/WebReaper.Stealth.CloakBrowser)).
 
 ## Why this satellite
 
@@ -60,4 +60,4 @@ var endpoint = await CdpLaunchHelpers.LaunchAsync(
 
 ## SemVer
 
-10.0.0 (initial release). See [ADR-0052](https://github.com/pavlovtech/WebReaper/blob/master/docs/adr/0052-cdp-direct-loader-satellite.md) for the design.
+10.0.0 (initial release). See [ADR-0052](https://github.com/alex-on-ai/WebReaper/blob/master/docs/adr/0052-cdp-direct-loader-satellite.md) for the design.

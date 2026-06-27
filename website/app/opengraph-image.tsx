@@ -71,7 +71,7 @@ export default function OpenGraphImage() {
         </div>
 
         <div style={{ display: "flex", fontSize: 24, color: "#9aa3ad" }}>
-          github.com/pavlovtech/WebReaper
+          github.com/alex-on-ai/WebReaper
         </div>
       </div>
     ),

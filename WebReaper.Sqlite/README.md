@@ -1,6 +1,6 @@
 # WebReaper.Sqlite
 
-SQLite embedded-store adapters for [WebReaper](https://github.com/pavlovtech/WebReaper):
+SQLite embedded-store adapters for [WebReaper](https://github.com/alex-on-ai/WebReaper):
 a **local durable scheduler** (and, from the next slice, a visited-link
 tracker) backed by SQLite via `Microsoft.Data.Sqlite`. "Resume" is a
 `SELECT … WHERE consumed = 0` over an indexed table; not a hand-rolled

@@ -8,7 +8,7 @@
 
 AI-native web scraper. Single binary with a bundled Claude Code skill.
 
-Built by [HighCraft](https://highcraft.io).
+Built by [HighCraft.io](https://highcraft.io).
 
 ## Install
 
@@ -530,4 +530,4 @@ Contributions are welcome under the same MIT terms; sign-off via DCO ([`CONTRIBU
 
 ---
 
-Built by [HighCraft](https://highcraft.io) — a software and AI engineering team.
+Built by [HighCraft.io](https://highcraft.io) — a software and AI engineering team.

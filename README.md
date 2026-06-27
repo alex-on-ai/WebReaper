@@ -8,6 +8,8 @@
 
 AI-native web scraper. Single binary with a bundled Claude Code skill.
 
+Built by [HighCraft](https://highcraft.io).
+
 ## Install
 
 **macOS / Linux (Homebrew):**
@@ -525,3 +527,7 @@ WebReaper is MIT-licensed (ADR-0017). All NuGet packages plus the `WebReaper.Cli
 Prior to the 10.0.0 wave, WebReaper was GPL-3.0-or-later. The relicense is strictly more permissive: every existing user is unaffected; new users who couldn't embed under GPL now can. Historical contributors are credited in [`CONTRIBUTORS.md`](CONTRIBUTORS.md). See [`docs/adr/0017-relicense-gpl-mit.md`](docs/adr/0017-relicense-gpl-mit.md) for the analysis and contributor consent path.
 
 Contributions are welcome under the same MIT terms; sign-off via DCO ([`CONTRIBUTING.md`](CONTRIBUTING.md)).
+
+---
+
+Built by [HighCraft](https://highcraft.io) — a software and AI engineering team.

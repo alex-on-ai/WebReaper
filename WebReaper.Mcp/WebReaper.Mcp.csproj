@@ -11,6 +11,7 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
 
     <PackageId>WebReaper.Mcp</PackageId>
+    <Version>11.3.2</Version>
     <Title>WebReaper.Mcp</Title>
     <Description>MCP (Model Context Protocol) server satellite for WebReaper. Exposes scrape / map / extract as MCP tools over stdio for Cursor / Claude Desktop / Copilot Studio. Interop adapter; the primary agent surface remains the WebReaper CLI (ADR-0043). Satellite (ADR-0009); heavy MCP SDK deps quarantined; core stays AOT-clean.</Description>
     <!-- ADR-0017: relicensed to MIT to remove funnel-adoption friction. -->

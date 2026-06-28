@@ -1,5 +1,7 @@
 # WebReaper.Mcp
 
+<!-- mcp-name: io.github.alex-on-ai/webreaper -->
+
 MCP (Model Context Protocol) server satellite for [WebReaper](https://github.com/alex-on-ai/WebReaper).
 
 The agent client (Cursor / Claude Desktop / Copilot Studio) spawns

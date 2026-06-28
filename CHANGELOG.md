@@ -1,5 +1,14 @@
 # Changelog
 
+## 11.3.2: WebReaper.Mcp registry ownership marker
+
+A metadata-only patch to WebReaper.Mcp. No API or behaviour changes.
+
+- **MCP Registry listing.** Adds the `mcp-name: io.github.alex-on-ai/webreaper` ownership marker to the WebReaper.Mcp package README, the proof that registry.modelcontextprotocol.io requires to verify package ownership, plus a root `server.json` describing the stdio server. This unblocks listing WebReaper on the official MCP Registry.
+
+Single-satellite release: only `WebReaper.Mcp` ships at 11.3.2. The other 14 packages stay at 11.3.1.
+
+
 ## 11.3.1: alex-on-ai canonicalization (metadata + branding)
 
 A metadata and branding patch that finishes the GitHub account rename from `pavlovtech` to `alex-on-ai`. No API changes; the one behavioural change is that the shipped CLI now resolves updates against the canonical `alex-on-ai` repo.

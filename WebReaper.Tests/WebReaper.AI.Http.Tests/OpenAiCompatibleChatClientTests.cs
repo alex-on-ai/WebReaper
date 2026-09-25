@@ -12,12 +12,19 @@ public class OpenAiCompatibleChatClientTests
     private const string CannedResponse =
         """{"model":"gpt-4o-mini","choices":[{"message":{"content":"{\"title\":\"hi\"}"},"finish_reason":"stop"}],"usage":{"prompt_tokens":11,"completion_tokens":7,"total_tokens":18}}""";
 
+    // Issue #265: LM Studio's 400 body for response_format json_object.
+    private const string LmStudioJsonObjectRejection =
+        """{"error":"'response_format.type' must be 'json_schema' or 'text'"}""";
+
     private static (OpenAiCompatibleChatClient Client, CapturingHandler Handler) NewClient(
         string? apiKey = "sk-test",
         string responseJson = CannedResponse,
         HttpStatusCode status = HttpStatusCode.OK)
+        => NewClient(new CapturingHandler((status, responseJson)), apiKey);
+
+    private static (OpenAiCompatibleChatClient Client, CapturingHandler Handler) NewClient(
+        CapturingHandler handler, string? apiKey = "sk-test")
     {
-        var handler = new CapturingHandler(responseJson, status);
         var client = new OpenAiCompatibleChatClient(
             "https://api.example.com/v1", "gpt-4o-mini", apiKey, new HttpClient(handler));
         return (client, handler);
@@ -56,6 +63,7 @@ public class OpenAiCompatibleChatClientTests
 
         await client.GetResponseAsync([new ChatMessage(ChatRole.User, "x")], options);
 
+        Assert.Single(handler.RequestBodies);
         using var doc = JsonDocument.Parse(handler.RequestBody!);
         var root = doc.RootElement;
         Assert.Equal(256, root.GetProperty("max_tokens").GetInt32());
@@ -110,6 +118,70 @@ public class OpenAiCompatibleChatClientTests
     }
 
     [Fact]
+    public async Task Retries_without_response_format_when_the_server_rejects_json_object()
+    {
+        var (client, handler) = NewClient(new CapturingHandler(
+            (HttpStatusCode.BadRequest, LmStudioJsonObjectRejection),
+            (HttpStatusCode.OK, CannedResponse)));
+
+        var response = await client.GetResponseAsync(
+            [new ChatMessage(ChatRole.User, "x")], new ChatOptions { ResponseFormat = ChatResponseFormat.Json });
+
+        Assert.Equal("""{"title":"hi"}""", response.Text);
+        Assert.Equal(2, handler.RequestBodies.Count);
+        Assert.Equal("json_object", ResponseFormatType(handler.RequestBodies[0]));
+        Assert.Null(ResponseFormatType(handler.RequestBodies[1]));
+    }
+
+    [Fact]
+    public async Task Omits_json_object_on_later_calls_once_the_retry_succeeded()
+    {
+        var (client, handler) = NewClient(new CapturingHandler(
+            (HttpStatusCode.BadRequest, LmStudioJsonObjectRejection),
+            (HttpStatusCode.OK, CannedResponse)));
+        var json = new ChatOptions { ResponseFormat = ChatResponseFormat.Json };
+
+        await client.GetResponseAsync([new ChatMessage(ChatRole.User, "x")], json);
+        await client.GetResponseAsync([new ChatMessage(ChatRole.User, "y")], json);
+
+        // One rejected request, one retry, then a single request up front.
+        Assert.Equal(3, handler.RequestBodies.Count);
+        Assert.Null(ResponseFormatType(handler.RequestBodies[2]));
+    }
+
+    [Fact]
+    public async Task Does_not_retry_a_400_that_does_not_name_response_format()
+    {
+        var (client, handler) = NewClient(
+            responseJson: """{"error":"context length exceeded"}""", status: HttpStatusCode.BadRequest);
+
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(() => client.GetResponseAsync(
+            [new ChatMessage(ChatRole.User, "x")], new ChatOptions { ResponseFormat = ChatResponseFormat.Json }));
+
+        Assert.Contains("400", ex.Message);
+        Assert.Single(handler.RequestBodies);
+    }
+
+    [Fact]
+    public async Task Surfaces_the_retry_failure_and_keeps_json_object_when_the_retry_fails()
+    {
+        var (client, handler) = NewClient(new CapturingHandler(
+            (HttpStatusCode.BadRequest, LmStudioJsonObjectRejection),
+            (HttpStatusCode.NotFound, """{"error":"model not found"}"""),
+            (HttpStatusCode.OK, CannedResponse)));
+        var json = new ChatOptions { ResponseFormat = ChatResponseFormat.Json };
+
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(
+            () => client.GetResponseAsync([new ChatMessage(ChatRole.User, "x")], json));
+        Assert.Contains("404", ex.Message);
+        Assert.Contains("model not found", ex.Message);
+
+        // The retry did not succeed, so the next call still asks for json_object.
+        await client.GetResponseAsync([new ChatMessage(ChatRole.User, "y")], json);
+        Assert.Equal("json_object", ResponseFormatType(handler.RequestBodies[2]));
+    }
+
+    [Fact]
     public async Task Throws_NotSupported_when_tools_are_present()
     {
         var (client, _) = NewClient();
@@ -127,20 +199,34 @@ public class OpenAiCompatibleChatClientTests
         Assert.Null(client.GetService(typeof(string)));
     }
 
-    private sealed class CapturingHandler(string responseJson, HttpStatusCode status) : HttpMessageHandler
+    private static string? ResponseFormatType(string requestBody)
     {
+        using var doc = JsonDocument.Parse(requestBody);
+        return doc.RootElement.TryGetProperty("response_format", out var format)
+            ? format.GetProperty("type").GetString()
+            : null;
+    }
+
+    // Answers with the replies in order, repeating the last one, and records
+    // every request body.
+    private sealed class CapturingHandler(params (HttpStatusCode Status, string Body)[] replies) : HttpMessageHandler
+    {
+        private int _calls;
+
         public HttpRequestMessage? Request { get; private set; }
-        public string? RequestBody { get; private set; }
+        public List<string> RequestBodies { get; } = [];
+        public string? RequestBody => RequestBodies.LastOrDefault();
 
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Request = request;
             if (request.Content is not null)
-                RequestBody = await request.Content.ReadAsStringAsync(cancellationToken);
+                RequestBodies.Add(await request.Content.ReadAsStringAsync(cancellationToken));
+            var (status, body) = replies[Math.Min(_calls++, replies.Length - 1)];
             return new HttpResponseMessage(status)
             {
-                Content = new StringContent(responseJson, Encoding.UTF8, "application/json"),
+                Content = new StringContent(body, Encoding.UTF8, "application/json"),
             };
         }
     }

@@ -25,17 +25,4 @@
   <ItemGroup>
     <ProjectReference Include="..\..\WebReaper.Mongo\WebReaper.Mongo.csproj" />
   </ItemGroup>
-
-  <!--
-    GHSA-6c8g-7p36-r338 (SharpCompress zip-slip): pulled here only
-    transitively, via the WebReaper.Mongo project reference (MongoDB.Driver
-    wire-protocol compression). Same not-applicable analysis as the shipped
-    package — see the canonical rationale in WebReaper.Mongo/WebReaper.Mongo.csproj.
-    NuGetAuditSuppress is per-project and does not flow across a
-    ProjectReference, so the shipped suppression must be mirrored on this
-    (non-shipped, IsPackable=false) test project to keep `dotnet build` clean.
-  -->
-  <ItemGroup>
-    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-6c8g-7p36-r338" />
-  </ItemGroup>
 </Project>

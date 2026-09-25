@@ -17,7 +17,9 @@ namespace WebReaper.IntegrationTests;
 // the CI gate today (CI runs only WebReaper.UnitTests).
 public sealed class RedisContainerFixture : IAsyncLifetime
 {
-    private readonly RedisContainer _redis = new RedisBuilder().Build();
+    // Explicit image: Testcontainers 4.10+ obsoletes the parameterless
+    // builder; redis:7.0 is the image that constructor defaulted to.
+    private readonly RedisContainer _redis = new RedisBuilder("redis:7.0").Build();
 
     public string ConnectionString => _redis.GetConnectionString();
 

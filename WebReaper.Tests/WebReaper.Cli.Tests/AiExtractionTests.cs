@@ -79,17 +79,52 @@ public class AiExtractionTests
         Assert.NotNull(client);
     }
 
+    // The cost-guard cases pin interactivity and the reply source instead of
+    // reading the test host's stdin, which is the terminal's when dotnet test
+    // runs in one. TextReader.Null answers any prompt with EOF, which aborts, so
+    // a case that expects no prompt fails instead of hanging if the guard asks.
+
     [Fact]
     public void CostGuard_never_blocks_automation()
     {
-        // The test host has no TTY (input redirected), so the guard must return
-        // without prompting for every shape - automation is never blocked.
+        // A non-TTY run (CI / pipe) must return without prompting for every
+        // shape: automation is never blocked.
         var prompt = new AiExtractionContext("x", false, null, "m", "u");
-        AiExtraction.ConfirmCrawlCostOrThrow(prompt, maxPages: 1000, yes: false);
-        AiExtraction.ConfirmCrawlCostOrThrow(prompt, maxPages: 1000, yes: true);
-        AiExtraction.ConfirmCrawlCostOrThrow(prompt, maxPages: 10, yes: false);
+        AiExtraction.ConfirmCrawlCostOrThrow(
+            prompt, maxPages: 1000, yes: false, interactive: false, input: TextReader.Null);
+        AiExtraction.ConfirmCrawlCostOrThrow(
+            prompt, maxPages: 1000, yes: true, interactive: false, input: TextReader.Null);
+        AiExtraction.ConfirmCrawlCostOrThrow(
+            prompt, maxPages: 10, yes: false, interactive: false, input: TextReader.Null);
         // --infer is never guarded (about one LLM call).
         AiExtraction.ConfirmCrawlCostOrThrow(
-            new AiExtractionContext(null, true, null, "m", "u"), maxPages: 5000, yes: false);
+            new AiExtractionContext(null, true, null, "m", "u"),
+            maxPages: 5000, yes: false, interactive: false, input: TextReader.Null);
+    }
+
+    [Fact]
+    public void CostGuard_interactive_skips_the_prompt_for_yes_small_crawls_and_infer()
+    {
+        var prompt = new AiExtractionContext("x", false, null, "m", "u");
+        AiExtraction.ConfirmCrawlCostOrThrow(
+            prompt, maxPages: 1000, yes: true, interactive: true, input: TextReader.Null);
+        AiExtraction.ConfirmCrawlCostOrThrow(
+            prompt, maxPages: 10, yes: false, interactive: true, input: TextReader.Null);
+        AiExtraction.ConfirmCrawlCostOrThrow(
+            new AiExtractionContext(null, true, null, "m", "u"),
+            maxPages: 5000, yes: false, interactive: true, input: TextReader.Null);
+    }
+
+    [Fact]
+    public void CostGuard_interactive_large_prompt_crawl_asks_first()
+    {
+        // "y" proceeds; "n" or EOF aborts.
+        var prompt = new AiExtractionContext("x", false, null, "m", "u");
+        AiExtraction.ConfirmCrawlCostOrThrow(
+            prompt, maxPages: 1000, yes: false, interactive: true, input: new StringReader("y"));
+        Assert.Throws<CliException>(() => AiExtraction.ConfirmCrawlCostOrThrow(
+            prompt, maxPages: 1000, yes: false, interactive: true, input: new StringReader("n")));
+        Assert.Throws<CliException>(() => AiExtraction.ConfirmCrawlCostOrThrow(
+            prompt, maxPages: 1000, yes: false, interactive: true, input: TextReader.Null));
     }
 }

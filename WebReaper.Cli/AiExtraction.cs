@@ -88,15 +88,22 @@ internal static class AiExtraction
     /// page. When interactive and the page cap exceeds the threshold, confirm
     /// before running. `--yes` skips; a non-TTY (CI / pipe) never blocks; only
     /// --prompt scales per page (--infer is ~1 call, so it is not guarded).</summary>
-    public static void ConfirmCrawlCostOrThrow(AiExtractionContext ai, int maxPages, bool yes)
+    public static void ConfirmCrawlCostOrThrow(AiExtractionContext ai, int maxPages, bool yes) =>
+        ConfirmCrawlCostOrThrow(ai, maxPages, yes, interactive: !Console.IsInputRedirected, Console.In);
+
+    // The guard with its console dependencies injected: whether a user can
+    // answer, and where the answer is read from. Tests pin both, because the
+    // test host's stdin is the terminal's when dotnet test runs in one.
+    internal static void ConfirmCrawlCostOrThrow(
+        AiExtractionContext ai, int maxPages, bool yes, bool interactive, TextReader input)
     {
         const int threshold = 50;
-        if (ai.Prompt is null || yes || maxPages <= threshold || Console.IsInputRedirected)
+        if (ai.Prompt is null || yes || maxPages <= threshold || !interactive)
             return;
 
         Console.Error.Write(
             $"?  crawl --prompt makes one AI call per page (up to {maxPages}). Continue? [y/N] ");
-        var reply = Console.ReadLine()?.Trim();
+        var reply = input.ReadLine()?.Trim();
         if (reply is null || !reply.Equals("y", StringComparison.OrdinalIgnoreCase))
             throw new CliException(
                 "Aborted. Re-run with --yes to skip this prompt, or lower --max-pages.");

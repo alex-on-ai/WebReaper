@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace WebReaper.Cli.Stealth;
 
 /// <summary>
@@ -57,7 +59,21 @@ public static class KnownStealthBackends
                 // stalls at startup and never publishes its CDP endpoint.
                 // Ignored on other platforms.
                 "--use-mock-keychain",
-            ]),
+            ],
+            // The fingerprint persona per host OS, as the vendor's wrappers pick
+            // it (getDefaultStealthArgs). A Mac presents as a Mac: the Windows
+            // persona on one reports a Windows GPU beside the Mac's fonts and
+            // CPU architecture. Linux and Windows present as a Windows desktop,
+            // the commoner profile.
+            LaunchArgsByOs: new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["osx"] = ["--fingerprint-platform=macos"],
+                ["linux"] = ["--fingerprint-platform=windows"],
+                ["win"] = ["--fingerprint-platform=windows"],
+            },
+            // The seed the binary derives the whole identity from (GPU, screen,
+            // hardware, noise): one seed, one device.
+            FingerprintSeedArg: "--fingerprint={seed}"),
         // Future entries — Patchright, Camoufox, undetected-chromedriver —
         // land here as community PRs alongside their library satellites.
     ];
@@ -89,8 +105,13 @@ public static class KnownStealthBackends
 /// <param name="VendorCache">Where the vendor's own installer caches builds,
 /// or <c>null</c> if it has none.</param>
 /// <param name="LaunchArgs">Vendor-recommended command-line flags the CLI
-/// passes to the launched binary (in addition to
+/// passes to the launched binary on every OS (in addition to
 /// <c>--remote-debugging-port=0</c> which is added automatically).</param>
+/// <param name="LaunchArgsByOs">Flags passed on one host OS only, keyed by the
+/// OS part of the RID (<c>osx</c>, <c>linux</c>, <c>win</c>).</param>
+/// <param name="FingerprintSeedArg">The flag that seeds the fingerprint
+/// identity, with a <c>{seed}</c> placeholder, or <c>null</c> if the backend
+/// takes no seed.</param>
 public sealed record StealthBackend(
     string Name,
     string DisplayName,
@@ -101,7 +122,9 @@ public sealed record StealthBackend(
     IReadOnlyList<StealthBuild> Builds,
     string? BinaryPathEnvVar,
     VendorCache? VendorCache,
-    IReadOnlyList<string> LaunchArgs)
+    IReadOnlyList<string> LaunchArgs,
+    IReadOnlyDictionary<string, IReadOnlyList<string>> LaunchArgsByOs,
+    string? FingerprintSeedArg)
 {
     /// <summary>The pinned build for <paramref name="platform"/> (a RID from
     /// <see cref="StealthInstaller.CurrentPlatform"/>), or <c>null</c> when
@@ -113,6 +136,33 @@ public sealed record StealthBackend(
     /// checksum manifest) in the release of <paramref name="version"/>.</summary>
     public string ReleaseUrl(string version, string file) =>
         ReleaseUrlPattern.Replace("{version}", version).Replace("{file}", file);
+
+    /// <summary>The flags for one launch on <paramref name="platform"/> (a RID
+    /// from <see cref="StealthInstaller.CurrentPlatform"/>):
+    /// <see cref="LaunchArgs"/>, the host OS's <see cref="LaunchArgsByOs"/>, the
+    /// fingerprint <paramref name="seed"/>, and <c>--no-sandbox</c> only when
+    /// <paramref name="privileged"/> on Linux, where Chromium refuses to start
+    /// as root with its sandbox on. Everywhere else the sandbox stays on: the
+    /// flag changes nothing a page can see, and a stealth build lags
+    /// Chromium's security fixes.</summary>
+    public IReadOnlyList<string> LaunchArgsFor(string? platform, int seed, bool privileged)
+    {
+        var os = platform?.Split('-')[0];
+        List<string> args = [.. LaunchArgs];
+        if (os is not null && LaunchArgsByOs.TryGetValue(os, out var osArgs))
+            args.AddRange(osArgs);
+        if (FingerprintSeedArg is not null)
+            args.Add(FingerprintSeedArg.Replace("{seed}", seed.ToString(CultureInfo.InvariantCulture)));
+        if (privileged && os == "linux")
+            args.Add("--no-sandbox");
+        return args;
+    }
+
+    /// <summary><see cref="LaunchArgsFor(string?, int, bool)"/> with a fresh
+    /// seed from 10000 to 99999, the range the vendor's wrappers draw per
+    /// launch, so every launch presents a new device.</summary>
+    public IReadOnlyList<string> LaunchArgsFor(string? platform, bool privileged) =>
+        LaunchArgsFor(platform, Random.Shared.Next(10_000, 100_000), privileged);
 }
 
 /// <summary>One platform's pinned upstream build of a

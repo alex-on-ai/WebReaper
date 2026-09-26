@@ -43,10 +43,13 @@ jobs:
     # Llm/Mcp/Perf/LiveSite by trait.
     - name: Integration tests (LocalServer tier)
       run: dotnet test WebReaper.Tests/WebReaper.IntegrationTests/WebReaper.IntegrationTests.csproj --no-build --verbosity normal --filter "Category=LocalServer"
-    # CLI end-to-end: the real CLI binary as a subprocess against the local
-    # site (scrape md/json, map, version, exit codes).
-    - name: CLI end-to-end tests
-      run: dotnet test WebReaper.Tests/WebReaper.Cli.Tests/WebReaper.Cli.Tests.csproj --no-build --verbosity normal --filter "Category=Cli"
+    # CLI tests, the whole project: the pure unit tests (arg parsing, the
+    # escalation plan, output writing, the update notifier, the stealth
+    # registry) plus the end-to-end class, which runs the real CLI binary as a
+    # subprocess against the local site (scrape md/json, map, version, exit
+    # codes). All offline: loopback only, writes only under the temp dir.
+    - name: CLI tests (unit + end-to-end)
+      run: dotnet test WebReaper.Tests/WebReaper.Cli.Tests/WebReaper.Cli.Tests.csproj --no-build --verbosity normal
     # ADR 0008 step 4: the AOT smoke test. Publishes the Newtonsoft-free
     # production path with PublishAot; the project scopes the IL2026/IL3050
     # family to build errors, so any trim/AOT regression fails CI here. Native

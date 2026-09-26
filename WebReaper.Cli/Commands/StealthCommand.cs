@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using WebReaper.Cli.Stealth;
 
 namespace WebReaper.Cli.Commands;
@@ -11,8 +10,11 @@ namespace WebReaper.Cli.Commands;
 /// URL (legal model = <c>playwright install</c>).
 /// </summary>
 /// <remarks>
-/// v1 ships <c>install</c>; <c>list</c>, <c>path</c>, <c>uninstall</c>
-/// follow. The picker UI flips to non-interactive (or fails fast) when
+/// <c>install</c> and <c>path</c> first look for an existing install (the
+/// backend's binary-path env var, the CLI cache, then the vendor's own
+/// installer cache; see <see cref="StealthInstaller.FindInstalled"/>), so
+/// <c>install</c> is idempotent and never re-downloads a binary the user
+/// already has. The picker UI flips to non-interactive (or fails fast) when
 /// <c>--yes</c> is set or <c>WEBREAPER_AUTO_STEALTH=1</c> in env.
 /// </remarks>
 internal static class StealthCommand
@@ -62,13 +64,31 @@ internal static class StealthCommand
             if (backend is null) return 1;
         }
 
-        var version = args.GetFlag("version") ?? backend.RecommendedVersion;
+        var platform = StealthInstaller.CurrentPlatform();
+        var build = backend.BuildFor(platform);
+        var pinned = PinnedVersion(args, build);
 
+        // An install the user already has (env override, the CLI cache, or the
+        // vendor's own installer cache) is reused rather than downloaded again.
+        var existing = FindInstalled(backend, build, pinned);
+        if (existing is not null)
+        {
+            Console.WriteLine($"✓ {backend.DisplayName} already installed ({Describe(backend, existing)}): {existing.Path}");
+            return 0;
+        }
+
+        if (build is null)
+        {
+            Console.Error.WriteLine($"✗ {NoBuildMessage(backend, platform)}");
+            return 1;
+        }
+
+        var version = pinned ?? build.Version;
         if (!unattended)
         {
             Console.WriteLine();
-            Console.WriteLine($"  {backend.DisplayName} v{version}");
-            Console.WriteLine($"  Size:    ~{backend.SizeMb} MB");
+            Console.WriteLine($"  {backend.DisplayName} {version} ({build.Platform})");
+            Console.WriteLine($"  Size:    ~{build.SizeMb} MB");
             Console.WriteLine($"  License: {backend.LicenseUrl}");
             Console.WriteLine();
             Console.Write($"By using {backend.DisplayName} you accept its binary license. Proceed? [Y/n] ");
@@ -80,91 +100,61 @@ internal static class StealthCommand
             }
         }
 
-        var cacheDir = System.IO.Path.Combine(
-            BrowserCommand.GetWebReaperHome(), "stealth", backend.Name, version);
-        Directory.CreateDirectory(cacheDir);
-
-        var rid = GetRid();
-        var url = backend.ReleaseUrlPattern
-            .Replace("{version}", version)
-            .Replace("{rid}", rid);
-
-        Console.WriteLine($"↓ Downloading {backend.DisplayName} v{version} from {url}");
-        var archive = System.IO.Path.Combine(cacheDir, $"{backend.Name}-{rid}.tar.gz");
         try
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(20) };
-            using var resp = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
-            resp.EnsureSuccessStatusCode();
-            await using var fs = File.Create(archive);
-            await resp.Content.CopyToAsync(fs);
+            var binary = await StealthInstaller.InstallAsync(
+                backend, build, version,
+                StealthInstaller.CacheRoot(backend, BrowserCommand.GetWebReaperHome()),
+                http, Console.Out);
+            Console.WriteLine($"✓ Installed: {binary}");
+            return 0;
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"✗ Download failed: {ex.Message}");
+            Console.Error.WriteLine($"✗ Install failed: {ex.Message}");
             return 1;
         }
-
-        Console.WriteLine($"↓ Extracting to {cacheDir}");
-        try { ExtractTar(archive, cacheDir); }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"✗ Extract failed: {ex.Message}");
-            return 1;
-        }
-        try { File.Delete(archive); } catch { }
-
-        var binary = ExpectedBinaryPath(cacheDir, backend);
-        if (!File.Exists(binary))
-        {
-            Console.Error.WriteLine(
-                $"✗ Install completed but expected binary not found at {binary}. " +
-                "The upstream archive layout may have changed; please report this.");
-            return 1;
-        }
-
-        if (!OperatingSystem.IsWindows())
-        {
-            try
-            {
-                var psi = new System.Diagnostics.ProcessStartInfo("chmod", $"+x \"{binary}\"")
-                {
-                    UseShellExecute = false, CreateNoWindow = true,
-                };
-                using var p = System.Diagnostics.Process.Start(psi);
-                p?.WaitForExit();
-            }
-            catch { /* best-effort; user can chmod manually if needed */ }
-        }
-
-        Console.WriteLine($"✓ Installed: {binary}");
-        return 0;
     }
 
     private static int Path(ParsedArgs args)
     {
         var name = args.Positional.Count > 1 ? args.Positional[1] : null;
-        if (name is null) { Console.Error.WriteLine("Usage: webreaper stealth path <backend>"); return 2; }
+        if (name is null) { Console.Error.WriteLine("Usage: webreaper stealth path <backend> [--version V]"); return 2; }
         var backend = KnownStealthBackends.Find(name);
         if (backend is null) { Console.Error.WriteLine($"Unknown backend: {name}"); return 2; }
-        var version = args.GetFlag("version") ?? backend.RecommendedVersion;
-        var cacheDir = System.IO.Path.Combine(
-            BrowserCommand.GetWebReaperHome(), "stealth", backend.Name, version);
-        var binary = ExpectedBinaryPath(cacheDir, backend);
-        if (!File.Exists(binary))
+
+        var platform = StealthInstaller.CurrentPlatform();
+        var build = backend.BuildFor(platform);
+        var pinned = PinnedVersion(args, build);
+
+        var found = FindInstalled(backend, build, pinned);
+        if (found is not null)
         {
-            Console.Error.WriteLine($"{backend.DisplayName} v{version} not installed. Run: webreaper stealth install {backend.Name}");
+            Console.WriteLine(found.Path);
+            return 0;
+        }
+
+        if (build is null)
+        {
+            Console.Error.WriteLine(NoBuildMessage(backend, platform));
             return 1;
         }
-        Console.WriteLine(binary);
-        return 0;
+        var versionFlag = pinned is null ? "" : $" --version {pinned}";
+        Console.Error.WriteLine(
+            $"{backend.DisplayName} {pinned ?? build.Version} not installed. Run: webreaper stealth install {backend.Name}{versionFlag}");
+        return 1;
     }
 
     private static int List()
     {
+        var platform = StealthInstaller.CurrentPlatform();
         Console.WriteLine("Available stealth backends (curated; install with `webreaper stealth install <name>`):");
         foreach (var b in KnownStealthBackends.All)
-            Console.WriteLine($"  • {b.Name,-15} {b.DisplayName,-15} v{b.RecommendedVersion}  ({b.SizeMb} MB)  {b.Description}");
+        {
+            Console.WriteLine($"  • {b.Name,-15} {b.DisplayName,-15} {BuildSummary(b, platform)}  {b.Description}");
+            Console.WriteLine($"    {"",-15} {InstallStatus(b, b.BuildFor(platform))}");
+        }
         return 0;
     }
 
@@ -175,9 +165,15 @@ internal static class StealthCommand
               install [<backend>] [--version V] [--yes]
                                        Download from upstream; interactive picker
                                        by default; --yes (or WEBREAPER_AUTO_STEALTH=1)
-                                       for unattended.
-              path    <backend>        Print cached binary path
+                                       for unattended. Reuses an existing install.
+              path    <backend> [--version V]
+                                       Print the binary path
               list                     List available curated backends
+
+            CloakBrowser is looked up, in order, at CLOAKBROWSER_BINARY_PATH (used
+            as-is), the CLI cache (~/.webreaper/stealth/cloakbrowser/), and the
+            cloakbrowser npm/pip wrapper's cache (~/.cloakbrowser/, or
+            CLOAKBROWSER_CACHE_DIR); install downloads only when all three miss.
 
             Curated backends are the ones the CLI can install. Library satellites
             (WebReaper.Stealth.X) ship freely; CLI integration is a small PR per backend.
@@ -187,11 +183,12 @@ internal static class StealthCommand
 
     private static StealthBackend? PromptPicker()
     {
+        var platform = StealthInstaller.CurrentPlatform();
         Console.WriteLine("Available stealth backends (downloaded from upstream; not bundled):");
         for (var i = 0; i < KnownStealthBackends.All.Length; i++)
         {
             var b = KnownStealthBackends.All[i];
-            Console.WriteLine($"  [{i + 1}] {b.DisplayName,-15} v{b.RecommendedVersion}  ({b.SizeMb} MB)  {b.Description}");
+            Console.WriteLine($"  [{i + 1}] {b.DisplayName,-15} {BuildSummary(b, platform)}  {b.Description}");
         }
         Console.Write($"Choice [1]: ");
         var reply = Console.ReadLine()?.Trim();
@@ -204,37 +201,56 @@ internal static class StealthCommand
         return KnownStealthBackends.All[n - 1];
     }
 
-    private static string ExpectedBinaryPath(string cacheDir, StealthBackend backend)
+    // The validated --version pin, or null for the platform's pinned build.
+    private static string? PinnedVersion(ParsedArgs args, StealthBuild? build)
     {
-        var name = OperatingSystem.IsWindows() ? backend.BinaryName + ".exe" : backend.BinaryName;
-        return System.IO.Path.Combine(cacheDir, name);
+        var pinned = args.GetFlag("version");
+        if (pinned is null || StealthInstaller.IsValidVersion(pinned)) return pinned;
+        var example = build is null ? "" : $" like {build.Version}";
+        throw new CliException($"Invalid --version '{pinned}': expected a build number{example}.");
     }
 
-    private static void ExtractTar(string archive, string destDir)
+    private static StealthInstall? FindInstalled(StealthBackend backend, StealthBuild? build, string? pinned) =>
+        StealthInstaller.FindInstalled(
+            backend, build, pinned,
+            BrowserCommand.GetWebReaperHome(),
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            Environment.GetEnvironmentVariable);
+
+    private static string Describe(StealthBackend backend, StealthInstall install) => install.Source switch
     {
-        var psi = new System.Diagnostics.ProcessStartInfo("tar", $"-xzf \"{archive}\" -C \"{destDir}\"")
+        InstallSource.EnvOverride => $"via {backend.BinaryPathEnvVar}",
+        InstallSource.WebReaperCache => $"{install.Version}, WebReaper cache",
+        _ => $"{install.Version}, {backend.DisplayName} wrapper cache",
+    };
+
+    private static string BuildSummary(StealthBackend backend, string? platform) =>
+        backend.BuildFor(platform) is { } build
+            ? $"{build.Version} (~{build.SizeMb} MB)"
+            : platform is null ? "no build for this platform" : $"no {platform} build";
+
+    private static string InstallStatus(StealthBackend backend, StealthBuild? build)
+    {
+        try
         {
-            UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true,
-        };
-        using var p = System.Diagnostics.Process.Start(psi)
-            ?? throw new InvalidOperationException("Failed to start `tar` — is it on PATH? (Windows 10+ ships tar.exe in-box.)");
-        p.WaitForExit();
-        if (p.ExitCode != 0)
+            return FindInstalled(backend, build, pinned: null) is { } install
+                ? $"installed ({Describe(backend, install)}): {install.Path}"
+                : "not installed";
+        }
+        catch (CliException ex)
         {
-            var stderr = p.StandardError.ReadToEnd();
-            throw new InvalidOperationException($"tar extract failed: {stderr.Trim()}");
+            return ex.Message;
         }
     }
 
-    private static string GetRid()
+    internal static string NoBuildMessage(StealthBackend backend, string? platform)
     {
-        if (OperatingSystem.IsWindows())
-            return Environment.Is64BitProcess ? "win-x64" : "win-x86";
-        if (OperatingSystem.IsMacOS())
-            return RuntimeInformation.OSArchitecture == Architecture.Arm64 ? "osx-arm64" : "osx-x64";
-        if (OperatingSystem.IsLinux())
-            return RuntimeInformation.OSArchitecture == Architecture.Arm64 ? "linux-arm64" : "linux-x64";
-        throw new PlatformNotSupportedException();
+        var builds = string.Join(", ", backend.Builds.Select(b => b.Platform));
+        var suggestion = backend.BinaryPathEnvVar is { } overrideVar
+            ? $"Point {overrideVar} at a {backend.DisplayName} binary you supply, or"
+            : "Instead,";
+        return $"{backend.DisplayName} publishes no build for {platform ?? "this platform"} (builds: {builds}). " +
+               $"{suggestion} scrape with --browser-cdp-url against a browser you run.";
     }
 
     private static bool EnvIsTrue(string name)

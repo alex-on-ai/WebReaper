@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WebReaper: Scrape any site. Feed your AI.</title>
+<meta name="description" content="WebReaper is an AI-native web scraper for .NET. One ~12 MB binary turns any site into clean Markdown or structured data. Build the pipeline and the CLI command and the C# write themselves.">
+<meta property="og:title" content="WebReaper: Scrape any site. Feed your AI.">
+<meta property="og:description" content="An AI-native web scraper for .NET. Build the pipeline: the CLI command and the C# write themselves.">
+<meta name="theme-color" content="#f6f6f2">
+<link rel="icon" type="image/png" href="webreaper-logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:ital,wght@0,400..900;1,400..900&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:oklch(97.1% .004 106);
+  --panel:#ffffff;
+  --ink:oklch(21% .012 270);
+  --ink-2:oklch(38% .012 270);
+  --wire:oklch(86% .006 106);
+  --line:oklch(30% .01 270);
+  --transport:oklch(52% .19 262);
+  --extract:oklch(50% .21 296);
+  --ai:oklch(62% .15 70);
+  --sink:oklch(56% .12 172);
+  --danger:oklch(55% .2 27);
+  --chip-bg:oklch(94.5% .006 106);
+  --shadow:4px 4px 0 oklch(21% .012 270 / .12);
+  --r:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{
+  background:var(--bg);
+  background-image:radial-gradient(oklch(21% .012 270 / .075) 1px, transparent 1px);
+  background-size:22px 22px;
+  color:var(--ink);
+  font-family:"Schibsted Grotesk",system-ui,sans-serif;
+  line-height:1.5;
+  font-size:16.5px;
+}
+code,pre,.mono{font-family:"Fira Code",ui-monospace,monospace}
+a{color:inherit}
+:focus-visible{outline:3px solid var(--transport);outline-offset:2px;border-radius:4px}
+.wrap{max-width:1140px;margin:0 auto;padding:0 clamp(16px,3.4vw,40px)}
+/* header */
+header.site{position:sticky;top:0;z-index:50;background:oklch(97.1% .004 106 / .88);backdrop-filter:blur(6px);border-bottom:2px solid var(--ink)}
+header.site .wrap{display:flex;align-items:center;gap:1.5rem;height:60px}
+.wordmark{display:flex;align-items:center;gap:.55rem;font-weight:800;font-size:1.12rem;letter-spacing:-.01em;text-decoration:none}
+.wordmark svg{flex:none}
+.wordmark .mark{flex:none;width:28px;height:28px;display:block}
+header nav{margin-left:auto;display:flex;gap:1.15rem;font-weight:600;font-size:.92rem}
+header nav a{text-decoration:none;border-bottom:2px solid transparent;padding:.2rem 0}
+header nav a:hover{border-bottom-color:var(--ink)}
+.gh{display:inline-flex;align-items:center;gap:.4rem;border:2px solid var(--ink);border-radius:999px;padding:.28rem .8rem;text-decoration:none;background:var(--panel);box-shadow:var(--shadow);font-size:.88rem}
+.gh:hover{transform:translate(-1px,-1px);box-shadow:5px 5px 0 oklch(21% .012 270 / .12)}
+/* hero */
+.hero{padding:clamp(2.6rem,6vw,4.6rem) 0 1.2rem}
+.hero h1{font-size:clamp(2.3rem,5.4vw,4.4rem);line-height:1.02;letter-spacing:-.025em;font-weight:800;text-wrap:balance;max-width:16ch}
+.hero h1 em{font-style:normal;color:var(--extract)}
+.hero p.lede{margin-top:1.1rem;max-width:56ch;font-size:clamp(1.02rem,1.4vw,1.18rem);color:var(--ink-2);text-wrap:pretty}
+.hero .facts{margin-top:1.15rem;display:flex;flex-wrap:wrap;gap:.5rem .6rem;font-size:.86rem;font-weight:600}
+.hero .facts span{border:1.5px solid var(--ink);border-radius:999px;padding:.18rem .68rem;background:var(--panel)}
+/* ============ RIG ============ */
+.rig{margin:2.2rem 0 0;border:2px solid var(--ink);border-radius:14px;background:var(--panel);box-shadow:var(--shadow);overflow:hidden}
+.rig-head{display:flex;align-items:center;gap:.8rem;padding:.7rem 1.1rem;border-bottom:2px solid var(--ink);background:var(--chip-bg)}
+.rig-head .dots{display:flex;gap:.32rem}
+.rig-head .dots i{width:.62rem;height:.62rem;border-radius:50%;border:1.5px solid var(--ink);background:var(--panel)}
+.rig-head strong{font-size:.95rem;letter-spacing:.01em}
+.rig-head .hint{margin-left:auto;font-size:.8rem;color:var(--ink-2);font-weight:500}
+.stations{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-bottom:2px solid var(--ink)}
+.station{padding:1rem 1.05rem 1.15rem;border-right:2px dashed var(--wire);position:relative}
+.station:last-child{border-right:0}
+.station > label{display:flex;align-items:center;gap:.5rem;font-weight:700;font-size:.9rem;margin-bottom:.65rem}
+.station .swatch{width:.85rem;height:.85rem;border-radius:3px;border:1.5px solid var(--ink);flex:none}
+#st-scope .swatch{background:var(--ink)}
+#st-transport .swatch{background:var(--transport)}
+#st-extract .swatch{background:var(--extract)}
+#st-sink .swatch{background:var(--sink)}
+.opts{display:flex;flex-direction:column;gap:.4rem}
+.opt{display:flex;align-items:center;gap:.55rem;border:1.5px solid var(--wire);border-radius:8px;padding:.42rem .6rem;cursor:pointer;background:var(--panel);font-size:.9rem;font-weight:600;transition:border-color .12s,background .12s}
+.opt:hover{border-color:var(--ink)}
+.opt input{accent-color:var(--ink);width:.95rem;height:.95rem;flex:none}
+.opt small{display:block;font-weight:500;color:var(--ink-2);font-size:.78rem;line-height:1.25}
+.opt.on{border-color:var(--ink);background:var(--chip-bg);box-shadow:2px 2px 0 oklch(21% .012 270 / .14)}
+.opt .llm{font-size:.66rem;font-weight:700;letter-spacing:.04em;color:var(--ai);border:1px solid var(--ai);border-radius:4px;padding:0 .3rem;margin-left:auto;flex:none}
+/* belt */
+.belt{position:relative;height:120px;border-bottom:2px solid var(--ink);background:
+  linear-gradient(oklch(21% .012 270 / .05) 1px,transparent 1px) 0 0/100% 24px}
+.belt svg{position:absolute;inset:0;width:100%;height:100%}
+.belt .node-label{font:600 11px "Fira Code",monospace;fill:var(--ink-2);letter-spacing:.04em}
+.puck{offset-path:path("M -30 60 L 1200 60");offset-distance:0%;position:absolute;width:26px;height:32px;border:2px solid var(--ink);border-radius:4px;background:#fff;box-shadow:2px 2px 0 oklch(21% .012 270/.14)}
+.puck::before{content:"";position:absolute;inset:5px 4px auto;height:3px;background:var(--ink);opacity:.7}
+.puck::after{content:"";position:absolute;inset:11px 4px auto;height:2px;background:var(--ink);opacity:.35;box-shadow:0 5px 0 oklch(21% .012 270/.35),0 10px 0 oklch(21% .012 270/.35)}
+.puck.md{border-color:var(--extract)}
+.puck.md::before{background:var(--extract)}
+@keyframes ride{from{offset-distance:0%}to{offset-distance:100%}}
+.belt .puck{animation:ride var(--dur,5.2s) linear infinite;animation-delay:var(--delay,0s)}
+@media(prefers-reduced-motion:reduce){.belt .puck{animation:none;offset-distance:var(--rest,30%)}}
+/* panes */
+.panes{display:grid;grid-template-columns:1.2fr 1fr;min-height:300px}
+.pane{padding:0;display:flex;flex-direction:column;min-width:0}
+.pane+.pane{border-left:2px solid var(--ink)}
+.pane-head{display:flex;align-items:center;gap:.7rem;padding:.55rem .95rem;border-bottom:1.5px solid var(--wire);font-size:.8rem;font-weight:700;letter-spacing:.03em}
+.pane-head .tag{color:var(--ink-2);font-weight:500;letter-spacing:0}
+.copy{margin-left:auto;border:1.5px solid var(--ink);background:var(--panel);border-radius:6px;font:600 .74rem "Schibsted Grotesk",sans-serif;padding:.22rem .6rem;cursor:pointer}
+.copy:hover{background:var(--chip-bg)}
+.copy.ok{background:var(--sink);color:#fff;border-color:var(--sink)}
+.pane pre{flex:1;padding:1rem 1.1rem 1.2rem;overflow-x:auto;font-size:.84rem;line-height:1.62;tab-size:2;white-space:pre}
+.pane pre .flash{animation:flash 1s ease-out}
+@keyframes flash{0%{background:oklch(90% .12 296 / .9)}100%{background:transparent}}
+@media(prefers-reduced-motion:reduce){.pane pre .flash{animation:none}}
+/* code tokens */
+.t-cmd{color:var(--ink);font-weight:600}
+.t-flag{color:var(--transport);font-weight:500}
+.t-str{color:var(--sink)}
+.t-com{color:oklch(55% .01 270)}
+.t-kw{color:var(--extract)}
+.t-ty{color:var(--transport)}
+.t-me{color:var(--ink);font-weight:600}
+.t-warn{color:var(--ai)}
+.note{border-top:1.5px solid var(--wire);padding:.6rem .95rem;font-size:.8rem;color:var(--ink-2)}
+.note strong{color:var(--ink)}
+/* sections */
+section{padding:clamp(3rem,7vw,5rem) 0 0}
+h2{font-size:clamp(1.7rem,3vw,2.5rem);letter-spacing:-.02em;font-weight:800;line-height:1.08;text-wrap:balance}
+.sub{margin-top:.6rem;color:var(--ink-2);max-width:58ch;text-wrap:pretty}
+/* seams */
+.seams{margin-top:1.8rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:1rem}
+.seam{border:2px solid var(--ink);border-radius:var(--r);background:var(--panel);padding:1.05rem 1.1rem;box-shadow:var(--shadow)}
+.seam h3{display:flex;align-items:center;gap:.55rem;font-size:1rem}
+.seam h3 .swatch{width:.8rem;height:.8rem;border-radius:3px;border:1.5px solid var(--ink)}
+.seam code.iface{display:inline-block;margin:.5rem 0 .35rem;font-size:.82rem;background:var(--chip-bg);border:1.5px solid var(--wire);border-radius:6px;padding:.15rem .5rem}
+.seam p{font-size:.9rem;color:var(--ink-2)}
+.seam ul{list-style:none;margin-top:.55rem;display:flex;flex-wrap:wrap;gap:.35rem}
+.seam li{font:500 .74rem "Fira Code",monospace;border:1.5px solid var(--wire);border-radius:999px;padding:.12rem .5rem;background:var(--panel)}
+/* climb */
+.climb{margin-top:1.8rem;border:2px solid var(--ink);border-radius:var(--r);background:var(--panel);box-shadow:var(--shadow);padding:1.3rem 1.2rem;display:grid;grid-template-columns:1.1fr .9fr;gap:1.6rem;align-items:center}
+.ladder{display:flex;flex-direction:column;gap:.55rem}
+.rung{display:flex;align-items:center;gap:.75rem;border:1.5px solid var(--wire);border-radius:8px;padding:.55rem .8rem}
+.rung b{font-size:.92rem}
+.rung small{color:var(--ink-2)}
+.rung .st{margin-left:auto;font:600 .72rem "Fira Code",monospace;border-radius:5px;padding:.1rem .45rem;border:1.5px solid currentColor}
+.rung.r1 .st{color:var(--danger)}
+.rung.r2 .st{color:var(--danger)}
+.rung.r3 .st{color:var(--sink)}
+.climb ul.rules{list-style:none;display:flex;flex-direction:column;gap:.5rem;font-size:.92rem}
+.climb ul.rules li{padding-left:1.2rem;position:relative}
+.climb ul.rules li::before{content:"→";position:absolute;left:0;color:var(--transport);font-weight:700}
+/* agents */
+.agents{margin-top:1.8rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem}
+.agent{border:2px solid var(--ink);border-radius:var(--r);background:var(--panel);padding:1.05rem 1.1rem;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:.5rem}
+.agent h3{font-size:1rem}
+.agent p{font-size:.9rem;color:var(--ink-2)}
+.agent pre{background:var(--ink);color:oklch(95% .01 106);border-radius:8px;padding:.7rem .8rem;font-size:.76rem;overflow-x:auto;margin-top:auto}
+/* install */
+.install{margin:clamp(3rem,7vw,5rem) 0 0;border:2px solid var(--ink);border-radius:14px;background:var(--ink);color:oklch(96% .005 106);padding:clamp(1.4rem,3.4vw,2.4rem);box-shadow:var(--shadow)}
+.install h2{color:#fff}
+.install .rows{margin-top:1.2rem;display:flex;flex-direction:column;gap:.6rem}
+.irow{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;border:1.5px solid oklch(45% .01 270);border-radius:9px;padding:.6rem .9rem}
+.irow b{flex:0 0 7.5rem;font-size:.85rem;color:oklch(75% .02 106)}
+.irow code{font-size:.82rem;overflow-x:auto;white-space:nowrap;scrollbar-width:none}
+.irow .copy{border-color:oklch(70% .01 270);background:transparent;color:#fff}
+.install p.fine{margin-top:.9rem;font-size:.82rem;color:oklch(72% .02 106)}
+footer.site{margin-top:clamp(3rem,7vw,5rem);border-top:2px solid var(--ink);padding:1.4rem 0 2.2rem;font-size:.88rem;color:var(--ink-2)}
+footer.site .wrap{display:flex;flex-wrap:wrap;gap:.8rem 2rem;align-items:center}
+footer.site a{font-weight:600}
+footer.site .r{margin-left:auto}
+/* responsive */
+@media(max-width:980px){
+  .stations{grid-template-columns:repeat(2,1fr)}
+  .station:nth-child(2){border-right:0}
+  .station:nth-child(-n+2){border-bottom:2px dashed var(--wire)}
+  .panes{grid-template-columns:1fr}
+  .pane+.pane{border-left:0;border-top:2px solid var(--ink)}
+  .climb{grid-template-columns:1fr}
+}
+@media(max-width:640px){
+  header nav a:not(.gh){display:none}
+  .belt{height:90px}
+}
+</style>
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <a class="wordmark" href="#">
+      <img class="mark" src="webreaper-logo.png" srcset="webreaper-logo.png 1x, webreaper-logo@2x.png 2x" width="28" height="28" alt="" aria-hidden="true">
+      WebReaper
+    </a>
+    <nav aria-label="site">
+      <a href="#stations">Stations</a>
+      <a href="#climb">Bot-protection</a>
+      <a href="#agents">Agents</a>
+      <a href="#install">Install</a>
+      <a href="./guide/">Guide</a>
+      <a class="gh" href="https://github.com/alex-on-ai/WebReaper">★ GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <section class="hero" aria-labelledby="h1">
+      <h1 id="h1">Scrape any site.<br><em>Feed your AI.</em></h1>
+      <p class="lede">WebReaper is an AI-native web scraper for .NET. One ~12 MB binary turns any
+      site, even bot-protected ones, into clean Markdown or structured data.
+      <strong>Build the pipeline below and the command and the code write themselves.</strong></p>
+      <div class="facts" aria-label="key facts">
+        <span>MIT license</span><span>~12 MB single binary</span><span>.NET library</span><span>MCP servers</span><span>bring any LLM: or none</span>
+      </div>
+
+      <!-- ================= RIG ================= -->
+      <div class="rig" id="rig">
+        <div class="rig-head">
+          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          <strong>REAPING LINE: configurator</strong>
+          <span class="hint">every option is a real flag or builder call</span>
+        </div>
+
+        <div class="stations" id="stations">
+          <fieldset class="station" id="st-scope">
+            <label><span class="swatch"></span>SCOPE</label>
+            <div class="opts">
+              <label class="opt on"><input type="radio" name="scope" value="page" checked><span>One page<small>webreaper scrape</small></span></label>
+              <label class="opt"><input type="radio" name="scope" value="site"><span>Whole site<small>webreaper crawl → JSON Lines</small></span></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="station" id="st-transport">
+            <label><span class="swatch"></span>TRANSPORT</label>
+            <div class="opts">
+              <label class="opt on"><input type="radio" name="transport" value="http" checked><span>HTTP<small>fast default; auto-climbs on block</small></span></label>
+              <label class="opt"><input type="radio" name="transport" value="browser"><span>Browser<small>JS-rendered pages (Chromium)</small></span></label>
+              <label class="opt"><input type="radio" name="transport" value="stealth"><span>Stealth<small>start at the CloakBrowser tier</small></span></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="station" id="st-extract">
+            <label><span class="swatch"></span>EXTRACTION</label>
+            <div class="opts">
+              <label class="opt on"><input type="radio" name="extract" value="md" checked><span>Markdown<small>LLM-ready, no schema, $0</small></span></label>
+              <label class="opt"><input type="radio" name="extract" value="schema"><span>CSS schema<small>deterministic fields, $0</small></span></label>
+              <label class="opt"><input type="radio" name="extract" value="infer"><span>Inferred schema<small>LLM once per site</small><span class="llm">LLM ×1</span></span></label>
+              <label class="opt"><input type="radio" name="extract" value="prompt"><span>Prompt<small>LLM on every page</small><span class="llm">LLM ×n</span></span></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="station" id="st-sink">
+            <label><span class="swatch"></span>DESTINATION</label>
+            <div class="opts">
+              <label class="opt on"><input type="radio" name="sink" value="stdout" checked><span>stdout<small>pipe it anywhere</small></span></label>
+              <label class="opt"><input type="radio" name="sink" value="file"><span>File<small>--output / shell redirect</small></span></label>
+              <label class="opt"><input type="radio" name="sink" value="mongo"><span>MongoDB<small>library sink (satellite pkg)</small></span></label>
+            </div>
+          </fieldset>
+        </div>
+
+        <div class="belt" aria-hidden="true">
+          <svg viewBox="0 0 1140 120" preserveAspectRatio="none">
+            <line x1="0" y1="60" x2="1140" y2="60" stroke="var(--wire)" stroke-width="2"/>
+            <g id="belt-nodes"></g>
+          </svg>
+          <div class="puck" style="--delay:0s"></div>
+          <div class="puck" style="--delay:-1.7s;--rest:55%"></div>
+          <div class="puck md" style="--delay:-3.4s;--rest:82%"></div>
+        </div>
+
+        <div class="panes">
+          <div class="pane">
+            <div class="pane-head">CLI <span class="tag" id="cli-tag">one binary, no runtime</span>
+              <button class="copy" data-copy="cli" type="button">copy</button></div>
+            <pre id="cli-pre" aria-live="polite"></pre>
+            <div class="note" id="cli-note"></div>
+          </div>
+          <div class="pane">
+            <div class="pane-head">C#: same line, as a library
+              <button class="copy" data-copy="cs" type="button">copy</button></div>
+            <pre id="cs-pre"></pre>
+            <div class="note">Output shape for this config: <code class="mono" id="shape"></code></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="stations-doc" aria-labelledby="h-seams">
+      <h2 id="h-seams">Every station is a seam.</h2>
+      <p class="sub">The builder is sugar over public interfaces. Don't like a station?
+      Implement one interface and clip your own part into the line: the other stations never notice.
+      Fifteen NuGet packages of ready parts ship in lockstep.</p>
+      <div class="seams">
+        <div class="seam">
+          <h3><span class="swatch" style="background:var(--transport)"></span>Transport</h3>
+          <code class="iface">IPageLoadTransport</code>
+          <p>How a URL becomes a document. HTTP lives in core; browsers are satellite parts.</p>
+          <ul><li>HTTP (core)</li><li>WebReaper.Playwright</li><li>WebReaper.Cdp</li><li>Stealth.CloakBrowser</li></ul>
+        </div>
+        <div class="seam">
+          <h3><span class="swatch" style="background:var(--extract)"></span>Extraction</h3>
+          <code class="iface">IContentExtractor</code>
+          <p>How a document becomes data. Deterministic fold by default; LLM adapters when you ask.</p>
+          <ul><li>Markdown (core)</li><li>Schema fold (core)</li><li>WebReaper.AI inferrer</li><li>LLM fallback / self-heal</li></ul>
+        </div>
+        <div class="seam">
+          <h3><span class="swatch" style="background:var(--sink)"></span>Destination</h3>
+          <code class="iface">IScraperSink</code>
+          <p>Where records land. Fan-out is concurrent; add as many sinks as you like.</p>
+          <ul><li>Console / CSV / JSONL</li><li>WebReaper.Mongo</li><li>WebReaper.Redis</li><li>WebReaper.Cosmos</li></ul>
+        </div>
+        <div class="seam">
+          <h3><span class="swatch" style="background:var(--ink)"></span>Crawl state</h3>
+          <code class="iface">IScheduler · IVisitedLinkTracker</code>
+          <p>Queue and dedup live behind seams too: swap in Redis or Service Bus and
+          multiple workers share one crawl. Same code, distributed.</p>
+          <ul><li>in-memory / file (core)</li><li>WebReaper.Sqlite</li><li>WebReaper.Redis</li><li>AzureServiceBus</li></ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="climb" aria-labelledby="h-climb">
+      <h2 id="h-climb">The line defends itself.</h2>
+      <p class="sub">Most scrapers make you guess when a site is blocking you. WebReaper detects the
+      block and escalates on its own: per page, paying the climb once per host.</p>
+      <div class="climb">
+        <div class="ladder" role="list" aria-label="escalation ladder">
+          <div class="rung r1" role="listitem"><b>1 · HTTP</b><small>fast fetch, zero overhead</small><span class="st">403 challenge</span></div>
+          <div class="rung r2" role="listitem"><b>2 · Browser</b><small>headless Chromium render</small><span class="st">still blocked</span></div>
+          <div class="rung r3" role="listitem"><b>3 · Stealth</b><small>CloakBrowser fork</small><span class="st">200 OK</span></div>
+        </div>
+        <ul class="rules">
+          <li>Climbs only when a page <em>actually looks blocked</em>: status, header, or body marker.</li>
+          <li>First confirmed block lifts that host's floor: the rest of the crawl starts at the working tier.</li>
+          <li>Still blocked at the top? The page is <strong>dropped</strong> and the run exits non-zero. Challenge pages never masquerade as data.</li>
+          <li>Self-hosted. No cloud round-trip. Stealth (~220 MB) downloads only if you opt in.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="agents" aria-labelledby="h-agents">
+      <h2 id="h-agents">Clips straight into your agent.</h2>
+      <p class="sub">Three interop surfaces, one engine underneath.</p>
+      <div class="agents">
+        <div class="agent">
+          <h3>Claude Code skill</h3>
+          <p>One command writes the skill; the next session routes "scrape X" intents to the CLI automatically.</p>
+          <pre>$ webreaper init
+Wrote WebReaper Agent Skill to
+  .claude/skills/webreaper/SKILL.md</pre>
+        </div>
+        <div class="agent">
+          <h3>MCP servers</h3>
+          <p>Six tools: scrape, map, extract, extract_with_prompt, extract_inferred, crawl: over stdio (Cursor, Claude Desktop) or Streamable HTTP (n8n).</p>
+          <pre>$ docker run -p 8080:8080 \
+  -e WEBREAPER_MCP_TOKEN=secret \
+  ghcr.io/alex-on-ai/webreaper-mcp-http</pre>
+        </div>
+        <div class="agent">
+          <h3>Autonomous agent (library)</h3>
+          <p>A goal, a URL, any IChatClient. Decide → persist → execute, with durable resume across restarts.</p>
+          <pre>var r = await LlmAgent.RunAsync(
+  "https://example.com",
+  goal: "find the support email",
+  chatClient);</pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="install" aria-labelledby="h-install" style="padding-top:0">
+      <div class="install">
+        <h2 id="h-install">Bolt it to your bench.</h2>
+        <div class="rows">
+          <div class="irow"><b>macOS / Linux</b><code>brew install alex-on-ai/webreaper/webreaper</code><button class="copy" data-copytext="brew install alex-on-ai/webreaper/webreaper" type="button">copy</button></div>
+          <div class="irow"><b>any POSIX sh</b><code>curl -fsSL https://raw.githubusercontent.com/alex-on-ai/WebReaper/master/scripts/install.sh | sh</code><button class="copy" data-copytext="curl -fsSL https://raw.githubusercontent.com/alex-on-ai/WebReaper/master/scripts/install.sh | sh" type="button">copy</button></div>
+          <div class="irow"><b>.NET library</b><code>dotnet add package WebReaper</code><button class="copy" data-copytext="dotnet add package WebReaper" type="button">copy</button></div>
+        </div>
+        <p class="fine">Windows binaries on <a href="https://github.com/alex-on-ai/WebReaper/releases/latest" style="color:#fff">GitHub Releases</a> ·
+        six platforms · macOS builds are Apple-notarized · no Docker, no signup, no metering.</p>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <span><strong>WebReaper</strong> · MIT · built by <a href="https://highcraft.io">HighCraft.io</a></span>
+    <a href="https://github.com/alex-on-ai/WebReaper">GitHub</a>
+    <a href="https://www.nuget.org/packages/WebReaper">NuGet</a>
+    <a href="./guide/">Design guide</a>
+    <span class="r">Concept: "The Reaping Line"</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+"use strict";
+const state={scope:"page",transport:"http",extract:"md",sink:"stdout"};
+const $=s=>document.querySelector(s);
+const cliPre=$("#cli-pre"),csPre=$("#cs-pre"),cliNote=$("#cli-note"),shape=$("#shape");
+const esc=s=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+const URLS={page:"https://example.com/post",site:"https://example.com"};
+
+function cliText(){
+  const u=URLS[state.scope];
+  const parts=["webreaper",state.scope==="page"?"scrape":"crawl",u];
+  /* start-tier flags are per-page flags on scrape; crawl always starts at HTTP
+     and auto-climbs per page (ADR-0083): so they only appear for scope=page */
+  if(state.scope==="page"&&state.transport==="browser")parts.push("--browser");
+  if(state.scope==="page"&&state.transport==="stealth")parts.push("--stealth");
+  if(state.extract==="schema")parts.push("--schema","schema.json");
+  if(state.extract==="infer")parts.push("--infer","\"title, author, date\"","--model","gpt-4o-mini","--llm-url","https://api.openai.com/v1");
+  if(state.extract==="prompt")parts.push("--prompt","\"title and author\"","--model","gpt-4o-mini","--llm-url","https://api.openai.com/v1");
+  if(state.scope==="site")parts.push("--max-pages","500");
+  let cmd=parts.join(" ");
+  if(state.sink==="file")cmd+=state.scope==="site"?" --output-dir ./out":" --output page"+(state.extract==="md"?".md":".json");
+  if(state.sink==="stdout"&&state.scope==="site")cmd+=" > pages.jsonl";
+  return cmd;
+}
+function cliHTML(){
+  let inq=false;
+  return cliText().split(" ").map((w,i)=>{
+    if(i===0||i===1)return '<span class="t-cmd">'+esc(w)+'</span>';
+    const opens=w.startsWith('"'),closes=w.endsWith('"');
+    if(opens||inq){
+      inq=opens?!closes:!closes?inq:false;
+      if(opens&&!closes)inq=true; if(closes)inq=false;
+      return '<span class="t-str">'+esc(w)+'</span>';
+    }
+    if(w.startsWith("--"))return '<span class="t-flag">'+esc(w)+'</span>';
+    return esc(w);
+  }).join(" ");
+}
+function csLines(){
+  const L=[];
+  const browser=state.transport!=="http";
+  L.push('<span class="t-kw">using</span> WebReaper.Builders;');
+  if(state.transport==="browser")L.push('<span class="t-kw">using</span> WebReaper.Playwright;');
+  if(state.transport==="stealth")L.push('<span class="t-kw">using</span> WebReaper.Stealth.CloakBrowser;');
+  if(state.extract==="infer"||state.extract==="prompt")L.push('<span class="t-kw">using</span> WebReaper.AI;');
+  if(state.sink==="mongo")L.push('<span class="t-kw">using</span> WebReaper.Mongo;');
+  L.push('');
+  L.push('<span class="t-kw">await using var</span> engine = <span class="t-kw">await</span> <span class="t-ty">ScraperEngineBuilder</span>');
+  L.push(`    .<span class="t-me">${browser?"CrawlWithBrowser":"Crawl"}</span>(<span class="t-str">"${URLS[state.scope]}"</span>)`);
+  if(state.extract==="md")L.push('    .<span class="t-me">AsMarkdown</span>()');
+  if(state.extract==="schema"){
+    L.push('    .<span class="t-me">Extract</span>(<span class="t-kw">new</span>()');
+    L.push('    {');
+    L.push('        <span class="t-kw">new</span>(<span class="t-str">"title"</span>, <span class="t-str">"h1"</span>),');
+    L.push('        <span class="t-kw">new</span>(<span class="t-str">"author"</span>, <span class="t-str">".byline a"</span>)');
+    L.push('    })');
+  }
+  if(state.extract==="infer"){
+    L.push('    .<span class="t-me">ExtractInferred</span>(<span class="t-str">"title, author, date"</span>)');
+    L.push('    .<span class="t-me">WithLlmSchemaInferrer</span>(chatClient)  <span class="t-com">// any IChatClient</span>');
+  }
+  if(state.extract==="prompt")L.push('    .<span class="t-me">ExtractWithPrompt</span>(chatClient, <span class="t-str">"title and author"</span>)');
+  if(state.scope==="site"){
+    L.push('    .<span class="t-me">Sweep</span>()                <span class="t-com">// recursive, on-domain</span>');
+    L.push('    .<span class="t-me">PageCrawlLimit</span>(<span class="t-str">500</span>)');
+  }
+  if(state.transport==="browser")L.push('    .<span class="t-me">WithPlaywrightPageLoader</span>()');
+  if(state.transport==="stealth")L.push('    .<span class="t-me">WithCloakBrowser</span>()      <span class="t-com">// auto-downloads on first use</span>');
+  if(state.sink==="stdout")L.push('    .<span class="t-me">WriteToConsole</span>()');
+  if(state.sink==="file")L.push(`    .<span class="t-me">WriteToJsonFile</span>(<span class="t-str">"${state.scope==="site"?"pages.json":"page.json"}"</span>)`);
+  if(state.sink==="mongo")L.push('    .<span class="t-me">WriteToMongoDb</span>(conn, <span class="t-str">"scraper"</span>, <span class="t-str">"records"</span>)');
+  L.push('    .<span class="t-me">BuildAsync</span>();');
+  L.push('');
+  L.push('<span class="t-kw">await</span> engine.<span class="t-me">RunAsync</span>();');
+  return L.join("\n");
+}
+function notes(){
+  const n=[];
+  if(state.transport==="http")n.push("<strong>Auto-climb is on by default:</strong> a page that looks blocked escalates HTTP → browser on its own: no flag.");
+  if(state.scope==="site"&&state.transport!=="http")n.push("<strong>A crawl has no start-tier flag:</strong> every page starts at HTTP and auto-climbs on a block; the first confirmed block lifts that host's floor for the rest of the run (ADR-0083)."+(state.transport==="stealth"?" Let the climb include the stealth rung unattended with <code>WEBREAPER_AUTO_STEALTH=1</code>.":" The library can still pin a browser transport: see the C# pane."));
+  if(state.scope==="page"&&state.transport==="stealth")n.push("<strong>--stealth</strong> starts the climb at the stealth rung, skipping the vanilla browser. The ~220 MB backend downloads only on opt-in.");
+  if(state.scope==="page"&&state.transport==="browser")n.push("<strong>--browser</strong> starts the climb at the browser rung. Managed Chromium via <code>webreaper browser install</code>, or BYO with <code>--browser-cdp-url</code>.");
+  if(state.extract==="infer")n.push("<strong>~1 LLM call per site:</strong> the schema is inferred once, then every page extracts deterministically. Key via <code>WEBREAPER_LLM_API_KEY</code>: never a flag.");
+  if(state.extract==="prompt")n.push("<strong>LLM on every page.</strong> On a whole-site crawl the CLI asks before a large run (<code>--yes</code> skips). Key via <code>WEBREAPER_LLM_API_KEY</code>.");
+  if(state.extract==="schema")n.push("Selectors in a JSON file for the CLI; inline (or source-generated from a <code>[ScrapeSchema]</code> class) in the library.");
+  if(state.extract==="md")n.push("Markdown is the default: no schema, no LLM, no cost. The envelope is <code>{title, markdown, url}</code> per page.");
+  if(state.sink==="mongo")n.push("<strong>MongoDB is a library sink</strong> (<code>WebReaper.Mongo</code>); the CLI pane shows the closest CLI equivalent: stdout you can pipe.");
+  return n.join(" ");
+}
+function shapeText(){
+  if(state.extract==="md")return state.scope==="site"?'{title, markdown, url} × n pages (JSON Lines)':'{title, markdown, url}';
+  return state.scope==="site"?'{your fields…} × n pages (JSON Lines)':'{your fields…} (JSON)';
+}
+function render(first){
+  cliPre.innerHTML=cliHTML();
+  csPre.innerHTML=csLines();
+  cliNote.innerHTML=notes();
+  shape.textContent=shapeText();
+  if(!first){
+    cliPre.classList.remove("flash");csPre.classList.remove("flash");
+    void cliPre.offsetWidth;
+    cliPre.classList.add("flash");csPre.classList.add("flash");
+  }
+  document.querySelectorAll(".station").forEach(st=>{
+    st.querySelectorAll(".opt").forEach(o=>o.classList.toggle("on",o.querySelector("input").checked));
+  });
+}
+document.querySelectorAll(".station input").forEach(i=>{
+  i.addEventListener("change",()=>{state[i.name]=i.value;render(false)});
+});
+/* mongo sink: cli shows stdout pipe: handled in cliText by treating mongo as stdout */
+const _cliText=cliText;
+cliText=function(){
+  if(state.sink!=="mongo")return _cliText();
+  const saved=state.sink;state.sink="stdout";const t=_cliText();state.sink=saved;return t;
+};
+/* copy buttons */
+document.querySelectorAll(".copy").forEach(b=>{
+  b.addEventListener("click",async()=>{
+    let text=b.dataset.copytext;
+    if(b.dataset.copy==="cli")text=cliText();
+    if(b.dataset.copy==="cs")text=csPre.textContent;
+    try{await navigator.clipboard.writeText(text)}catch(e){}
+    const old=b.textContent;b.textContent="copied";b.classList.add("ok");
+    setTimeout(()=>{b.textContent=old;b.classList.remove("ok")},1200);
+  });
+});
+/* belt nodes */
+const nodes=[["SOURCE",8,"var(--ink)"],["TRANSPORT",33,"var(--transport)"],["EXTRACT",58,"var(--extract)"],["SINK",86,"var(--sink)"]];
+const g=document.getElementById("belt-nodes");
+g.innerHTML=nodes.map(([n,x,c])=>`
+  <g>
+    <circle cx="${x*11.4}" cy="60" r="9" fill="${c}" opacity=".16"/>
+    <circle cx="${x*11.4}" cy="60" r="6" fill="var(--panel)" stroke="${c}" stroke-width="2.5"/>
+    <text class="node-label" x="${x*11.4}" y="94" text-anchor="middle">${n}</text>
+  </g>`).join("");
+render(true);
+})();
+</script>
+</body>
+</html>

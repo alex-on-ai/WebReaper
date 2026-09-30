@@ -25,6 +25,10 @@ internal static class ScrapeCommand
     private static readonly string[] ChromeNames =
         ["google-chrome", "chromium", "chrome", "microsoft-edge", "msedge"];
 
+    // The stealth rung's backend (ADR-0055 registry row): installed by name,
+    // launched with its vendor flags.
+    private static readonly StealthBackend StealthBackend = KnownStealthBackends.Find("cloakbrowser")!;
+
     public static async Task<int> RunAsync(ParsedArgs args)
     {
         if (args.Positional.Count < 1)
@@ -60,8 +64,8 @@ internal static class ScrapeCommand
     // ----- stealth-inclusion decision (startup) -----
 
     // Resolve the flag-driven decision; for the interactive AskUser case, prompt
-    // once. Non-interactive AskUser defaults to No (never download 220 MB
-    // speculatively when there is no one to ask).
+    // once. Non-interactive AskUser defaults to No (never download hundreds of
+    // MB speculatively when there is no one to ask).
     private static async Task<bool> ResolveStealthAsync(ScrapeContext ctx)
     {
         switch (EscalationPlan.ResolveStealth(ctx.Browser, ctx.Stealth, ctx.AutoStealth, ctx.NoAutoStealth))
@@ -72,8 +76,10 @@ internal static class ScrapeCommand
                 return false;
             default:
                 if (Console.IsInputRedirected) return false;
-                Console.Error.Write(
-                    "?  Enable the stealth fallback tier (downloads CloakBrowser ~220 MB now)? [y/N] ");
+                var download = StealthBackend.BuildFor(StealthInstaller.CurrentPlatform()) is { } build
+                    ? $"downloads {StealthBackend.DisplayName} ~{build.SizeMb} MB unless already installed"
+                    : StealthBackend.DisplayName;
+                Console.Error.Write($"?  Enable the stealth fallback tier ({download})? [y/N] ");
                 var reply = Console.ReadLine()?.Trim();
                 return await Task.FromResult(
                     reply is not null && reply.Equals("y", StringComparison.OrdinalIgnoreCase));
@@ -87,13 +93,13 @@ internal static class ScrapeCommand
     {
         Console.Error.WriteLine(
             "↓  Ensuring CloakBrowser via `webreaper stealth install cloakbrowser --yes`...");
-        var code = await RunSelfAsync("stealth", "install", "cloakbrowser", "--yes");
+        var code = await RunSelfAsync("stealth", "install", StealthBackend.Name, "--yes");
         if (code != 0)
         {
             Console.Error.WriteLine($"✗  Stealth install failed (exit {code}).");
             return null;
         }
-        return await CaptureSelfAsync("stealth", "path", "cloakbrowser");
+        return await CaptureSelfAsync("stealth", "path", StealthBackend.Name);
     }
 
     // ----- ship the records, block-aware exit code (ADR-0083) -----
@@ -179,6 +185,7 @@ internal static class ScrapeCommand
             {
                 ExecutablePath = stealthPath,
                 Headless = true,
+                AdditionalArgs = StealthBackend.LaunchArgs,
             });
 
         if (ctx.Follow is not null) builder = builder.Follow(ctx.Follow);
@@ -198,9 +205,11 @@ internal static class ScrapeCommand
 
     // ----- self-invocation helpers -----
 
-    /// <summary>Re-invoke this CLI binary as a subprocess and inherit
-    /// stdout/stderr (so the install command's ↓/✓ progress lines render to the
-    /// user). Returns the exit code.</summary>
+    /// <summary>Re-invoke this CLI binary as a subprocess and return its exit
+    /// code. The child's stdout, where the install reports its ↓/✓ progress, is
+    /// forwarded to our stderr: an inherited stdout is the same file or pipe as
+    /// the scrape's own, so the progress lines would land in the scraped output.
+    /// The child's stderr is inherited.</summary>
     private static async Task<int> RunSelfAsync(params string[] argv)
     {
         var path = Environment.ProcessPath
@@ -209,10 +218,13 @@ internal static class ScrapeCommand
         {
             UseShellExecute = false,
             CreateNoWindow = false,
+            RedirectStandardOutput = true,
         };
         foreach (var a in argv) psi.ArgumentList.Add(a);
         using var p = Process.Start(psi)
             ?? throw new CliException($"Failed to spawn self ({path}).");
+        while (await p.StandardOutput.ReadLineAsync() is { } line)
+            Console.Error.WriteLine(line);
         await p.WaitForExitAsync();
         return p.ExitCode;
     }

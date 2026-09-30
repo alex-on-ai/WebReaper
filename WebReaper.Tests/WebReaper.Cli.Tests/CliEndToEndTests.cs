@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using WebReaper.Cli.Stealth;
 using WebReaper.TestServer;
 using Xunit;
 using Xunit.Abstractions;
@@ -58,7 +59,8 @@ public sealed class CliEndToEndTests : IClassFixture<CliSiteFixture>
         return cliDll;
     }
 
-    private async Task<CliResult> RunCli(IEnumerable<string> args, (string, string)? env = null)
+    // A null env value removes that variable from the CLI's environment.
+    private async Task<CliResult> RunCli(IEnumerable<string> args, params (string Name, string? Value)[] env)
     {
         var cliDll = ResolveCliDll();
 
@@ -70,7 +72,11 @@ public sealed class CliEndToEndTests : IClassFixture<CliSiteFixture>
         };
         psi.ArgumentList.Add(cliDll);
         foreach (var a in args) psi.ArgumentList.Add(a);
-        if (env is { } e) psi.Environment[e.Item1] = e.Item2;
+        foreach (var (name, value) in env)
+        {
+            if (value is null) psi.Environment.Remove(name);
+            else psi.Environment[name] = value;
+        }
 
         using var p = Process.Start(psi)!;
         var stdout = await p.StandardOutput.ReadToEndAsync();
@@ -211,5 +217,99 @@ public sealed class CliEndToEndTests : IClassFixture<CliSiteFixture>
 
         Assert.Equal(2, r.ExitCode);
         Assert.Contains("Missing <url>", r.Stderr);
+    }
+
+    // ----- stealth install / path (#264), offline: an existing install is
+    // found, so nothing is downloaded -----
+
+    private static string CreateTempFile()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"wr-cloak-{Guid.NewGuid():N}");
+        File.WriteAllText(path, "");
+        return path;
+    }
+
+    [Fact]
+    public async Task Stealth_path_prints_the_binary_path_override()
+    {
+        var binary = CreateTempFile();
+        try
+        {
+            var r = await RunCli(["stealth", "path", "cloakbrowser"], ("CLOAKBROWSER_BINARY_PATH", binary));
+
+            Assert.Equal(0, r.ExitCode);
+            Assert.Equal(binary, r.Stdout.Trim());
+        }
+        finally
+        {
+            File.Delete(binary);
+        }
+    }
+
+    [Fact]
+    public async Task Stealth_install_reuses_an_existing_binary_instead_of_downloading()
+    {
+        var binary = CreateTempFile();
+        try
+        {
+            var r = await RunCli(["stealth", "install", "cloakbrowser", "--yes"], ("CLOAKBROWSER_BINARY_PATH", binary));
+
+            Assert.Equal(0, r.ExitCode);
+            Assert.Contains("already installed", r.Stdout);
+            Assert.Contains(binary, r.Stdout);
+        }
+        finally
+        {
+            File.Delete(binary);
+        }
+    }
+
+    [Fact]
+    public async Task Stealth_path_rejects_a_binary_path_override_to_a_missing_file()
+    {
+        var missing = Path.Combine(Path.GetTempPath(), $"wr-missing-{Guid.NewGuid():N}");
+
+        var r = await RunCli(["stealth", "path", "cloakbrowser"], ("CLOAKBROWSER_BINARY_PATH", missing));
+
+        Assert.Equal(2, r.ExitCode);
+        Assert.Contains("CLOAKBROWSER_BINARY_PATH", r.Stderr);
+    }
+
+    [Fact]
+    public async Task Stealth_path_finds_a_cloakbrowser_wrapper_install()
+    {
+        // The #264 layout: the npm/pip wrapper's cache (relocated here with
+        // CLOAKBROWSER_CACHE_DIR) holding chromium-<build>/<executable>. A build
+        // number no real install has keeps the CLI's own cache out of the lookup.
+        var build = KnownStealthBackends.Find("cloakbrowser")!.BuildFor(StealthInstaller.CurrentPlatform());
+        if (build is null) return; // upstream publishes no build for this machine
+        const string version = "999.0.0.0.1";
+        var cacheDir = Path.Combine(Path.GetTempPath(), $"wr-cloak-{Guid.NewGuid():N}");
+        var exe = Path.Combine([cacheDir, $"chromium-{version}", .. build.Executable.Split('/')]);
+        Directory.CreateDirectory(Path.GetDirectoryName(exe)!);
+        File.WriteAllText(exe, "");
+        if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(exe, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        try
+        {
+            var r = await RunCli(
+                ["stealth", "path", "cloakbrowser", "--version", version],
+                ("CLOAKBROWSER_CACHE_DIR", cacheDir), ("CLOAKBROWSER_BINARY_PATH", null));
+
+            Assert.Equal(0, r.ExitCode);
+            Assert.Equal(exe, r.Stdout.Trim());
+        }
+        finally
+        {
+            Directory.Delete(cacheDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Stealth_list_shows_the_curated_backends()
+    {
+        var r = await RunCli(["stealth", "list"]);
+
+        Assert.Equal(0, r.ExitCode);
+        Assert.Contains("cloakbrowser", r.Stdout);
     }
 }

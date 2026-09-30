@@ -150,8 +150,10 @@ Rule of thumb: "everything on the site" → `crawl`; "the pages matching X" →
   no flag at all. For a site that defeats a vanilla browser, add the stealth
   tier: `--stealth` starts the climb there, or `--auto-stealth` (or
   `WEBREAPER_AUTO_STEALTH=1`) includes it without the startup Y/n prompt, which
-  is the right choice in agent / unattended contexts. The stealth install is
-  ~220 MB, fetched once at startup when the tier is included.
+  is the right choice in agent / unattended contexts. The stealth install
+  (roughly 150 to 560 MB depending on platform) is fetched once, at startup
+  when the tier is included; an existing CloakBrowser (`CLOAKBROWSER_BINARY_PATH`,
+  or the cloakbrowser npm/pip wrapper's `~/.cloakbrowser/`) is reused instead.
 - **Known protected up front**: `--stealth` (implies `--browser`) starts at the
   stealth tier; `--no-auto-stealth` caps the climb at the browser tier.
 

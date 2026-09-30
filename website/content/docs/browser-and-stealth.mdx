@@ -92,6 +92,12 @@ webreaper browser install
 webreaper stealth install
 ```
 
+If CloakBrowser is already on the machine, the CLI uses it instead of
+downloading it again: a binary named by `CLOAKBROWSER_BINARY_PATH`, or one
+installed by the cloakbrowser npm or pip package (`~/.cloakbrowser/`, or
+`CLOAKBROWSER_CACHE_DIR`). `webreaper stealth path cloakbrowser` prints the
+binary it will use.
+
 ## Page actions
 
 Browser transports support a closed set of page actions, so you can drive

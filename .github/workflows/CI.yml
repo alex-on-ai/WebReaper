@@ -30,6 +30,27 @@ jobs:
       run: dotnet build --no-restore
     - name: Test
       run: dotnet test WebReaper.Tests/WebReaper.UnitTests/WebReaper.UnitTests.csproj --no-build --verbosity normal
+    # Offline satellite suites: every WebReaper.Tests/WebReaper.*.Tests project
+    # (the convention docs/RELEASE-RUNBOOK.md's guardrail loop relies on), so a
+    # new satellite's suite joins the gate without a CI edit. No Docker,
+    # browser, network, or keys. The DLL check matters: `dotnet test --no-build`
+    # on a project the solution build skipped exits 0 without running a test,
+    # which is how WebReaper.Redis.Tests dropped out unnoticed. The CLI suite
+    # has its own step below.
+    - name: Satellite tests (offline)
+      run: |
+        status=0
+        for dir in WebReaper.Tests/WebReaper.*.Tests; do
+          name=${dir##*/}
+          case "$name" in WebReaper.Cli.Tests) continue ;; esac
+          if ! ls "$dir"/bin/Debug/*/"$name".dll > /dev/null 2>&1; then
+            echo "::error::$name was not built by the solution build; check its WebReaper.sln configuration rows"
+            status=1
+            continue
+          fi
+          dotnet test "$dir/$name.csproj" --no-build --verbosity normal || status=1
+        done
+        exit $status
     # ADR-0022: distributed-adapter coverage. ubuntu-latest ships Docker, so
     # Testcontainers spins an ephemeral Redis (free on public-repo runners —
     # unlimited Actions minutes). Scoped to ONLY RedisDistributedAdapterTests:
@@ -43,10 +64,13 @@ jobs:
     # Llm/Mcp/Perf/LiveSite by trait.
     - name: Integration tests (LocalServer tier)
       run: dotnet test WebReaper.Tests/WebReaper.IntegrationTests/WebReaper.IntegrationTests.csproj --no-build --verbosity normal --filter "Category=LocalServer"
-    # CLI end-to-end: the real CLI binary as a subprocess against the local
-    # site (scrape md/json, map, version, exit codes).
-    - name: CLI end-to-end tests
-      run: dotnet test WebReaper.Tests/WebReaper.Cli.Tests/WebReaper.Cli.Tests.csproj --no-build --verbosity normal --filter "Category=Cli"
+    # CLI tests, the whole project: the pure unit tests (arg parsing, the
+    # escalation plan, output writing, the update notifier, the stealth
+    # registry) plus the end-to-end class, which runs the real CLI binary as a
+    # subprocess against the local site (scrape md/json, map, version, exit
+    # codes). All offline: loopback only, writes only under the temp dir.
+    - name: CLI tests (unit + end-to-end)
+      run: dotnet test WebReaper.Tests/WebReaper.Cli.Tests/WebReaper.Cli.Tests.csproj --no-build --verbosity normal
     # ADR 0008 step 4: the AOT smoke test. Publishes the Newtonsoft-free
     # production path with PublishAot; the project scopes the IL2026/IL3050
     # family to build errors, so any trim/AOT regression fails CI here. Native

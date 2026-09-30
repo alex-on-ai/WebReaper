@@ -15,8 +15,10 @@ public static class CloakBrowserBuilderExtensions
 {
     /// <summary>
     /// Use CloakBrowser as the Dynamic-page transport. On first call:
-    /// detects an existing CloakBrowser binary (PATH + the satellite's
-    /// cache dir); downloads from upstream if absent (subject to
+    /// reuses an existing CloakBrowser binary (<see cref="CloakBrowserOptions.ExecutablePath"/>,
+    /// <c>CLOAKBROWSER_BINARY_PATH</c>, the WebReaper cache, then the
+    /// cloakbrowser npm / pip wrapper's cache); downloads the platform's
+    /// pinned build from upstream if absent (subject to
     /// <see cref="CloakBrowserOptions.AutoInstall"/>); launches it with the
     /// stealth-fork's recommended flags; wires the resulting CDP endpoint
     /// into <see cref="CdpPageLoaderBuilderExtensions.WithCdpPageLoader(ScraperEngineBuilder, string)"/>.
@@ -37,7 +39,7 @@ public static class CloakBrowserBuilderExtensions
         var opts = options ?? new CloakBrowserOptions();
 
         // Sync-over-async at the builder boundary, matching the rest of
-        // the builder surface. Detection is cheap (one File.Exists); the
+        // the builder surface. Detection is cheap (a few file probes); the
         // download is the slow path and runs on first use, not every call.
         // ILogger is supplied by the builder pipeline at LoadAsync time,
         // not at registration time — install + launch run at build time

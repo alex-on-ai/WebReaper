@@ -14,10 +14,13 @@ namespace WebReaper.IntegrationTests;
 /// assert disposal tears down the spawned subprocess (ADR-0058).
 /// <para>
 /// Gated by env <c>WEBREAPER_STEALTH_SMOKE=1</c>. Vacuously passes when
-/// unset — keeps the CI gate green without forcing every contributor
-/// to download 220 MB on every test run. Run locally with
-/// <c>WEBREAPER_STEALTH_SMOKE=1 dotnet test --filter
-/// FullyQualifiedName~CloakBrowserSmokeTests</c>.
+/// unset, which keeps the CI gate green without forcing every contributor
+/// to download 150 to 560 MB (by platform) on every test run. Run locally
+/// with <c>WEBREAPER_STEALTH_SMOKE=1 dotnet test --filter
+/// FullyQualifiedName~CloakBrowserSmokeTests</c>. An existing install
+/// (<c>CLOAKBROWSER_BINARY_PATH</c>, the WebReaper cache, or the cloakbrowser
+/// npm / pip wrapper's <c>~/.cloakbrowser/</c>) is reused; the offline
+/// installer coverage lives in <c>WebReaper.Stealth.CloakBrowser.Tests</c>.
 /// </para>
 /// </summary>
 /// <remarks>
@@ -43,10 +46,11 @@ public class CloakBrowserSmokeTests
         }
 
         // Step 1: resolve the install. EnsureInstalledAsync is idempotent
-        // (no-op when already cached); a clean run downloads ~220 MB.
+        // (no-op when already installed); a clean run downloads the
+        // platform's pinned build, 150 to 560 MB.
         var options = new CloakBrowserOptions
         {
-            // AutoInstall.PromptYes (default) is interactive; the gated
+            // PromptLogger (the default) logs a license line; the gated
             // smoke uses NoPromptYes for unattended.
             AutoInstall = AutoInstallPolicy.NoPromptYes,
             Headless = true,

@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -24,6 +25,13 @@ namespace WebReaper.AI.Http;
 /// (the agent / action-resolver path) throws <see cref="NotSupportedException"/>
 /// rather than silently dropping the tools.
 /// </para>
+/// <para>
+/// JSON mode sends OpenAI's <c>response_format</c> <c>json_object</c>. A
+/// server that rejects it with a 400 naming <c>response_format</c> (LM Studio
+/// accepts only <c>json_schema</c> and <c>text</c>) gets the request once more
+/// without it, leaving the JSON instruction to the prompt. Once that retry
+/// succeeds, later calls on the instance omit <c>response_format</c> up front.
+/// </para>
 /// </summary>
 public sealed class OpenAiCompatibleChatClient : IChatClient
 {
@@ -32,6 +40,11 @@ public sealed class OpenAiCompatibleChatClient : IChatClient
     private readonly Uri _endpoint;
     private readonly string _defaultModel;
     private readonly string? _apiKey;
+
+    // Set once the endpoint rejected json_object and the retry without it
+    // succeeded: a server capability, so later calls skip the rejected round
+    // trip. Concurrent calls may each pay it once before this is visible.
+    private volatile bool _jsonObjectRejected;
 
     /// <summary>Construct the client.</summary>
     /// <param name="baseUrl">The endpoint base, e.g.
@@ -81,30 +94,12 @@ public sealed class OpenAiCompatibleChatClient : IChatClient
             Messages = BuildMessages(messages),
             Temperature = options?.Temperature,
             MaxTokens = options?.MaxOutputTokens,
-            ResponseFormat = options?.ResponseFormat is ChatResponseFormatJson
+            ResponseFormat = options?.ResponseFormat is ChatResponseFormatJson && !_jsonObjectRejected
                 ? new ResponseFormatSpec { Type = "json_object" }
                 : null,
         };
 
-        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, _endpoint);
-        var payload = JsonSerializer.Serialize(request, OpenAiJsonContext.Default.ChatCompletionRequest);
-        httpRequest.Content = new StringContent(payload, Encoding.UTF8, "application/json");
-        if (_apiKey is not null)
-        {
-            httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
-        }
-
-        using var httpResponse = await _http
-            .SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
-            .ConfigureAwait(false);
-
-        if (!httpResponse.IsSuccessStatusCode)
-        {
-            var body = await ReadBodySafeAsync(httpResponse, cancellationToken).ConfigureAwait(false);
-            throw new HttpRequestException(
-                $"OpenAI-compatible endpoint {_endpoint} returned " +
-                $"{(int)httpResponse.StatusCode} {httpResponse.ReasonPhrase}. {Truncate(body, 600)}");
-        }
+        using var httpResponse = await PostAsync(request, cancellationToken).ConfigureAwait(false);
 
         ChatCompletionResponse? completion;
         await using (var stream = await httpResponse.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false))
@@ -181,6 +176,70 @@ public sealed class OpenAiCompatibleChatClient : IChatClient
 
         return result;
     }
+
+    // POST the request and return the successful response, or throw
+    // HttpRequestException carrying the status and body. Issue #265: a 400
+    // naming response_format means the server refused json_object itself (LM
+    // Studio answers {"error":"'response_format.type' must be 'json_schema'
+    // or 'text'"}), so send the request once more without it. The prompt
+    // still asks for JSON, and WebReaper's LlmCall strips code fences and
+    // re-asks once on a parse failure.
+    private async Task<HttpResponseMessage> PostAsync(
+        ChatCompletionRequest request, CancellationToken cancellationToken)
+    {
+        var response = await SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (response.IsSuccessStatusCode)
+        {
+            return response;
+        }
+
+        using (response)
+        {
+            var body = await ReadBodySafeAsync(response, cancellationToken).ConfigureAwait(false);
+            if (request.ResponseFormat is null || !RejectsResponseFormat(response.StatusCode, body))
+            {
+                throw EndpointError(response, body);
+            }
+        }
+
+        request.ResponseFormat = null;
+        var retry = await SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!retry.IsSuccessStatusCode)
+        {
+            using (retry)
+            {
+                var body = await ReadBodySafeAsync(retry, cancellationToken).ConfigureAwait(false);
+                throw EndpointError(retry, body);
+            }
+        }
+
+        _jsonObjectRejected = true;
+        return retry;
+    }
+
+    private async Task<HttpResponseMessage> SendAsync(
+        ChatCompletionRequest request, CancellationToken cancellationToken)
+    {
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, _endpoint);
+        var payload = JsonSerializer.Serialize(request, OpenAiJsonContext.Default.ChatCompletionRequest);
+        httpRequest.Content = new StringContent(payload, Encoding.UTF8, "application/json");
+        if (_apiKey is not null)
+        {
+            httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
+        }
+
+        return await _http
+            .SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static bool RejectsResponseFormat(HttpStatusCode status, string body) =>
+        status == HttpStatusCode.BadRequest
+        && body.Contains("response_format", StringComparison.Ordinal);
+
+    private HttpRequestException EndpointError(HttpResponseMessage response, string body) =>
+        new($"OpenAI-compatible endpoint {_endpoint} returned " +
+            $"{(int)response.StatusCode} {response.ReasonPhrase}. {Truncate(body, 600)}");
 
     private static async Task<string> ReadBodySafeAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {

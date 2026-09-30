@@ -93,8 +93,12 @@ Flags (per-command):
     install [<backend>] [--version V] [--yes]
                              Download a stealth Chromium fork (CloakBrowser etc.).
                              Interactive picker by default; --yes for unattended.
-    path    <backend>        Print cached binary path.
-    list                     List curated stealth backends.
+                             Reuses an existing install instead of downloading.
+    path    <backend> [--version V]
+                             Print the binary path. CloakBrowser is found via
+                             CLOAKBROWSER_BINARY_PATH, ~/.webreaper/stealth/, or
+                             the cloakbrowser npm/pip cache (~/.cloakbrowser/).
+    list                     List curated stealth backends and install status.
 
   map:
     --search <text>     Substring filter on the returned URLs

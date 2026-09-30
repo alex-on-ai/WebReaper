@@ -298,3 +298,15 @@ the v10.x cleanup wave as a minor.
   (F5 from ADR-0055 grilling) — third rung after stealth.
 - **Detector telemetry / metric for false-positive rate.** Would need
   an opt-in counter. Out of scope for v10.x's local-CLI shape.
+
+## Amendment (2026-09-25): the install subprocess does not inherit the TTY (#264)
+
+"Subprocess vs in-process for the install" says the subprocess "inherits
+the controlling TTY", so a piped scrape stays clean. It does not: a child
+started without redirection inherits the parent's stdout file descriptor,
+which is the pipe or file itself. `webreaper scrape <url> --stealth >
+out.json` wrote the install's `↓ Downloading ...` line into `out.json`
+ahead of the records (reproduced on 11.3.1). The scrape now redirects the
+child's stdout and forwards it, line by line, to its own stderr; the
+child's stderr stays inherited. `webreaper stealth install` typed by hand
+is unchanged, so the substitutability argument stands.

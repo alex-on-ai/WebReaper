@@ -22,13 +22,18 @@ public sealed class CloakBrowserOptions
     /// from upstream if missing, log a license-acknowledgment line.</summary>
     public AutoInstallPolicy AutoInstall { get; set; } = AutoInstallPolicy.PromptLogger;
 
-    /// <summary>Pin a specific CloakBrowser release tag (e.g.
-    /// <c>"chromium-v146.0.7680.177.5"</c>). When <c>null</c>, the installer uses
-    /// <see cref="CloakBrowserInstaller.DefaultVersion"/>.</summary>
+    /// <summary>Pin a CloakBrowser build for the current platform instead of
+    /// the platform's pinned build (see the README): the release tag
+    /// (<c>"chromium-v146.0.7680.177.5"</c>) or the bare build
+    /// (<c>"146.0.7680.177.5"</c>). Not every release carries every platform;
+    /// the installer reads the release's <c>SHA256SUMS</c> before downloading
+    /// and fails fast when this platform's asset is missing. When <c>null</c>,
+    /// each platform installs its pinned build.</summary>
     public string? Version { get; set; }
 
     /// <summary>Optional pre-installed binary path. When set, the satellite
-    /// skips installer detection and uses this path directly.</summary>
+    /// skips installer detection and uses this path directly. Takes precedence
+    /// over the vendor's <c>CLOAKBROWSER_BINARY_PATH</c> env var.</summary>
     public string? ExecutablePath { get; set; }
 }
 
@@ -48,6 +53,9 @@ public enum AutoInstallPolicy
     NoPromptYes,
 
     /// <summary>Disabled: throw if the binary is not pre-installed. Use
-    /// in CI / airgapped scenarios where downloads are forbidden.</summary>
+    /// in CI / airgapped scenarios where downloads are forbidden.
+    /// Pre-installed means <see cref="CloakBrowserOptions.ExecutablePath"/>,
+    /// <c>CLOAKBROWSER_BINARY_PATH</c>, the WebReaper cache, or the
+    /// cloakbrowser npm / pip wrapper's cache.</summary>
     Disabled,
 }

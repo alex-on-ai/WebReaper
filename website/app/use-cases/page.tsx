@@ -17,10 +17,9 @@ export default function UseCasesIndex() {
 
   return (
     <div className="relative">
-      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-72 glow-accent" />
       <section className={`${container} py-16 sm:py-20`}>
-        <div className="mx-auto max-w-2xl text-center">
-          <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
+        <div className="max-w-2xl">
+          <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
             Built for real work
           </h1>
           <p className="mt-4 text-lg text-muted">

@@ -404,7 +404,7 @@ function StatusPill({ status, pill, won }: { status: TierStatus; pill?: string; 
   if (status === "idle") {
     // An idle rung reads "not needed" only when a LOWER rung already got through
     // (the climb won without reaching here). On a failed/blocked/in-flight run an
-    // unreached rung is still just "queued" — never claim it was unnecessary.
+    // unreached rung is still just "queued", never claim it was unnecessary.
     return (
       <span className="font-mono text-[11px] text-zinc-600">
         {won ? "not needed" : "queued"}

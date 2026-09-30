@@ -250,3 +250,75 @@ hardcoded list. The pattern is shallow because the seam beneath it
 
 **Minor (additive).** New satellite package in the lockstep wave; no core
 surface change. v10.0.0's major is owned by ADR-0053's Puppeteer deletion.
+
+## Amendment (2026-09-27): per-platform builds, existing-install reuse, and the macOS keychain switch
+
+PR #220 (11.1.2) made the satellite's auto-download resolve a real release,
+but on a wrong premise: it treated only linux-x64 and windows-x64 as
+published, because the newest free release (`chromium-v146.0.7680.177.5`)
+carries only those two assets, and it threw `PlatformNotSupportedException`
+everywhere else. The vendor's own npm / pip / NuGet wrappers instead pin an
+older free build per platform that still carries its asset. The CLI adopted
+that map for #264 (PR #268, recorded in its ADR-0055 amendment); the
+satellite now matches it:
+
+- **One pinned build per platform** (`CloakBrowserBuild`): linux-x64 and
+  win-x64 at 146.0.7680.177.5, linux-arm64 at 146.0.7680.177.3, osx-arm64
+  and osx-x64 at 145.0.7632.109.2. macOS and linux-arm64 now install; only
+  win-arm64 and 32-bit have no build, and they fail fast naming the
+  published platforms. This replaces the "reads the latest release
+  manifest" install shape above: the releases after 146 are `-pro` tags with
+  no public binaries. `CloakBrowserOptions.Version` overrides the pin for
+  the current platform and takes either the release tag
+  (`chromium-v<build>`) or the bare build. `DefaultVersion` keeps its value
+  and now documents only the linux-x64 / windows-x64 pin.
+- **Verified install.** The release's `SHA256SUMS` is fetched before the
+  150 to 560 MB download, so a release that lacks this platform fails in one
+  small request. The archive is hashed while it streams and must match, then
+  it is unpacked into a scratch directory that is renamed into place only
+  once complete, so an interrupted install never leaves a half-unpacked
+  build. The macOS tarballs' relative framework symlinks survive
+  `System.Formats.Tar` extraction and the bundle's signature stays valid
+  (`codesign --verify --deep --strict`). HTTP `Range` resume is still not
+  done: an interrupted download restarts.
+- **Existing installs first.** Lookup order: `CloakBrowserOptions.ExecutablePath`;
+  the vendor's `CLOAKBROWSER_BINARY_PATH` (a missing file is an error,
+  never a fall-through); the WebReaper cache
+  `~/.webreaper/stealth/cloakbrowser/<build>/`; then the vendor wrapper's
+  cache (`CLOAKBROWSER_CACHE_DIR`, else `~/.cloakbrowser/`, laid out
+  `chromium-<build>/`; the newest plain build wins, Pro builds are skipped).
+  The WebReaper cache moves to the CLI's `<build>/` layout, so an install
+  made by either is reused by the other; the `chromium-v<build>/`
+  directories 11.1.2 to 11.3.x wrote are still found, so upgrading does not
+  download the same build again. `AutoInstallPolicy.Disabled` counts all of
+  these as pre-installed.
+- **PATH is no longer searched.** The satellite probed PATH for
+  `cloakbrowser` / `cloak-browser`. The browser is named `chrome` /
+  `Chromium`; the only `cloakbrowser` upstream puts on PATH is the npm and
+  pip wrappers' own CLI (a Node / Python entry point), which the probe
+  would have launched as Chromium.
+- **`--use-mock-keychain` joins `CloakBrowserLauncher.RecommendedArgs`.**
+  Playwright and Puppeteer pass it on every platform. Without it the macOS
+  build stalls on the login keychain and never publishes its CDP endpoint
+  (measured for #268 on osx-arm64: no endpoint within 15 s without it, 2 s
+  with it). Other platforms ignore it. Consumers that reuse the list, such
+  as the cloud playground's stealth rung, pick it up too.
+
+The CLI and the satellite now carry the same installer twice, because the
+AOT CLI cannot reference satellites (ADR-0055). That is the duplication the
+planned `StealthInstallerBase` under "Accepted cost" names; with one backend
+it stays deferred, and the shared cache layout is the contract the two
+copies keep.
+
+Verified on osx-arm64: the env-gated `CloakBrowserSmokeTests` passes both
+reusing an npm-wrapper install in `~/.cloakbrowser/` (no download, no
+`~/.webreaper` created) and from an empty home (a real 147 MB download,
+SHA-256 verified, unpacked, launched, a page scraped, the process torn
+down). The offline coverage moves to a new
+`WebReaper.Tests/WebReaper.Stealth.CloakBrowser.Tests` project, which the
+PR gate's satellite-suite loop picks up by convention.
+
+Not done: verifying `SHA256SUMS.sig`, the Ed25519 signature the vendor
+wrappers check. .NET 10 has no standalone Ed25519 API and the satellite
+takes no crypto dependency, so the checksum guards against a corrupt
+download, not a compromised release origin.

@@ -27,7 +27,7 @@
          MongoDB.Driver's BSON serialization is reflection-based and not
          trim/AOT-clean. Quarantining the Mongo adapters here is exactly why
          the core stays dependency-light and AOT-clean; a core-only consumer
-         no longer pulls MongoDB.Driver (nor the SharpCompress graph below). -->
+         no longer pulls MongoDB.Driver (nor its transitive SharpCompress graph). -->
   </PropertyGroup>
 
   <ItemGroup>
@@ -40,21 +40,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="MongoDB.Driver" Version="3.8.1" />
+    <!-- Floor 3.9.0: the first MongoDB.Driver that pulls a patched
+         SharpCompress (0.48.1, fixing GHSA-6c8g-7p36-r338), so the audit
+         suppression ADR-0009 describes is no longer needed. -->
+    <PackageReference Include="MongoDB.Driver" Version="3.12.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
-  </ItemGroup>
-
-  <!--
-    GHSA-6c8g-7p36-r338: zip-slip in SharpCompress WriteToDirectory (archive
-    extraction). Suppressed as not applicable: no patched version exists (all
-    releases <= 0.47.4 are affected); WebReaper has zero direct SharpCompress
-    usage; it is pulled only transitively by MongoDB.Driver for wire-protocol
-    stream compression (Zstd/zlib), which never calls the vulnerable
-    archive-extraction API. Moved here from core with MongoDB.Driver (ADR
-    0009): the suppression travels with the dependency that pulls it. Revisit
-    if SharpCompress ships a fix or MongoDB.Driver drops the dependency.
-  -->
-  <ItemGroup>
-    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-6c8g-7p36-r338" />
   </ItemGroup>
 </Project>

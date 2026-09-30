@@ -19,7 +19,9 @@ namespace WebReaper.IntegrationTests;
 /// <see cref="RedisContainerFixture"/>). Requires Docker.</summary>
 public sealed class MongoContainerFixture : IAsyncLifetime
 {
-    private readonly MongoDbContainer _mongo = new MongoDbBuilder().Build();
+    // Explicit image: Testcontainers 4.10+ obsoletes the parameterless
+    // builder; mongo:6.0 is the image that constructor defaulted to.
+    private readonly MongoDbContainer _mongo = new MongoDbBuilder("mongo:6.0").Build();
     public string ConnectionString => _mongo.GetConnectionString();
     public Task InitializeAsync() => _mongo.StartAsync();
     public Task DisposeAsync() => _mongo.DisposeAsync().AsTask();

@@ -3,11 +3,19 @@ using WebReaper.Cli.Commands;
 
 namespace WebReaper.Cli.Tests;
 
+/// <summary>The xUnit collection for tests that set process environment
+/// variables. xUnit runs it after the parallel collections, never alongside
+/// them: a CLI subprocess started meanwhile (<see cref="CliEndToEndTests"/>)
+/// would inherit the mutated environment.</summary>
+[CollectionDefinition("ProcessEnvironment", DisableParallelization = true)]
+public sealed class ProcessEnvironmentCollection;
+
 /// <summary>
 /// ADR-0056. The ScrapeCommand's flag-parsing contract: --browser,
 /// --stealth, --auto-stealth, --no-auto-stealth, --browser-cdp-url +
 /// their composition (e.g. --stealth implies --browser).
 /// </summary>
+[Collection("ProcessEnvironment")]
 public class ScrapeContextTests
 {
     [Fact]

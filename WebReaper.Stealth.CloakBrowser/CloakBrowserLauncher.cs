@@ -12,10 +12,10 @@ namespace WebReaper.Stealth.CloakBrowser;
 public static class CloakBrowserLauncher
 {
     /// <summary>The launch-flag set CloakBrowser's vendor recommends.
-    /// Mostly mirrors a hardened Chromium config — no first-run dialogs,
-    /// no automatic translation prompts, no background networking. The
-    /// stealth patches live in the binary itself; the args don't add
-    /// stealth, only sanity.</summary>
+    /// Mostly mirrors a hardened Chromium config: no first-run dialogs,
+    /// no automatic translation prompts, no background networking, and a
+    /// mock keychain on macOS. The stealth patches live in the binary
+    /// itself; the args don't add stealth, only sanity.</summary>
     public static readonly IReadOnlyList<string> RecommendedArgs =
     [
         "--no-first-run",
@@ -25,6 +25,11 @@ public static class CloakBrowserLauncher
         "--disable-renderer-backgrounding",
         "--disable-features=TranslateUI,Translate",
         "--disable-dev-shm-usage",
+        // Keep Chromium off the macOS login keychain, as Playwright and
+        // Puppeteer do on every platform. Without it the macOS build stalls
+        // at startup and never publishes its CDP endpoint. Other platforms
+        // ignore the switch.
+        "--use-mock-keychain",
     ];
 
     /// <summary>Launch CloakBrowser at <paramref name="binaryPath"/> with

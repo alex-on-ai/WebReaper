@@ -32,7 +32,7 @@ dotnet build
 
 # Gate (deterministic, fast)
 dotnet test WebReaper.Tests/WebReaper.IntegrationTests --filter "Category=LocalServer"
-dotnet test WebReaper.Tests/WebReaper.Cli.Tests       --filter "Category=Cli"
+dotnet test WebReaper.Tests/WebReaper.Cli.Tests       # whole project: unit + Cli
 
 # On-demand
 docker info >/dev/null            # Container tier needs a running Docker

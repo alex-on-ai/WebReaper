@@ -36,7 +36,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The SHA256SUMS parser is internal; the integration test project binds to it. -->
-    <InternalsVisibleTo Include="WebReaper.IntegrationTests" />
+    <!-- The installer's discovery and download core is internal (platform,
+         home dirs, env and HttpClient as parameters); the offline test
+         project binds to it. -->
+    <InternalsVisibleTo Include="WebReaper.Stealth.CloakBrowser.Tests" />
   </ItemGroup>
 </Project>

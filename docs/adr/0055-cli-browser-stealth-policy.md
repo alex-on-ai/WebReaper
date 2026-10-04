@@ -304,3 +304,49 @@ delta, not a contract break. v10.0.0's major is owned by ADR-0053.
 - **Multi-platform CloakBrowser RID coverage** — depends on what
   CloakBrowser publishes. v10 satellite covers the RIDs the upstream
   ships; gaps documented in the satellite README.
+
+## Amendment (2026-09-25): per-platform CloakBrowser builds + existing-install detection (#264)
+
+The registry sketch above (one `recommendedVersion`, a
+`v{version}/cloakbrowser-{rid}` URL) stopped matching upstream.
+CloakBrowser now tags releases `chromium-v<build>`, removed the v0.3.x
+assets, and does not publish every platform in every release. Every
+`webreaper stealth install cloakbrowser` 404'd, so `--stealth` always fell
+back to the browser tier (#264). The library satellite was fixed in PR
+#220; the CLI was not, because it re-implements the installer (the
+"Accepted cost" above). What the CLI does now:
+
+- **One pinned build per RID.** A `KnownStealthBackends` row carries a
+  `StealthBuild` per platform (version, release asset, executable path
+  inside the archive, size), mirroring the per-platform pins the vendor's
+  own npm / pip / NuGet wrappers ship: linux-x64 and win-x64 at
+  146.0.7680.177.5, linux-arm64 at 146.0.7680.177.3, osx-arm64 and
+  osx-x64 at 145.0.7632.109.2. That closes the "Multi-platform
+  CloakBrowser RID coverage" deferral for the CLI (macOS and linux-arm64
+  install). A RID with no row (win-arm64, 32-bit) fails fast, naming the
+  published platforms and the two ways out (`CLOAKBROWSER_BINARY_PATH`,
+  `--browser-cdp-url`). `--version` pins another build for the same asset.
+- **Verified install.** The release's `SHA256SUMS` is fetched first, so a
+  release that lacks this platform fails before the 150 to 560 MB
+  download. The archive is hashed while it streams to disk and must match,
+  then it is unpacked with BCL APIs (`System.Formats.Tar`,
+  `System.IO.Compression`; AOT-clean, no external `tar`) into a scratch
+  directory that is renamed into place only once complete.
+- **Existing installs first.** `install` is idempotent and `path` reuses
+  what is already there, in order: the vendor's `CLOAKBROWSER_BINARY_PATH`
+  override (naming a missing file is an error, never a fall-through); the
+  CLI cache `~/.webreaper/stealth/cloakbrowser/<build>/`; then the vendor
+  wrapper's cache (`CLOAKBROWSER_CACHE_DIR`, else `~/.cloakbrowser/`,
+  laid out `chromium-<build>/`; the newest plain build wins, Pro builds
+  are skipped). PATH is deliberately not searched: the npm wrapper puts a
+  Node CLI named `cloakbrowser` there, not the browser.
+- **The row's launch flags are passed.** `LaunchArgs` was never handed to
+  the stealth rung; it now is, and it gains `--use-mock-keychain`.
+  Without that switch the macOS build stalls at startup on the login
+  keychain and never publishes its CDP endpoint (no endpoint after 15 s
+  without it, 2 s with it, on osx-arm64).
+
+Not done: verifying `SHA256SUMS.sig`, the Ed25519 signature the vendor
+wrappers check. .NET 10 has no standalone Ed25519 API and the CLI takes no
+crypto dependency, so the checksum guards against a corrupt download, not
+a compromised release origin.

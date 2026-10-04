@@ -17,12 +17,32 @@ public static class KnownStealthBackends
         new StealthBackend(
             Name: "cloakbrowser",
             DisplayName: "CloakBrowser",
-            RecommendedVersion: "0.3.30",
-            SizeMb: 220,
             Description: "58 fingerprint patches; recommended",
             LicenseUrl: "https://github.com/CloakHQ/CloakBrowser/blob/main/BINARY-LICENSE.md",
-            ReleaseUrlPattern: "https://github.com/CloakHQ/CloakBrowser/releases/download/v{version}/cloakbrowser-{rid}.tar.gz",
-            BinaryName: "cloakbrowser",
+            // Releases are tagged `chromium-v<build>`, each with a SHA256SUMS
+            // manifest beside its assets.
+            ReleaseUrlPattern: "https://github.com/CloakHQ/CloakBrowser/releases/download/chromium-v{version}/{file}",
+            ChecksumFile: "SHA256SUMS",
+            // One build per platform, mirroring the per-platform pins the
+            // vendor's own npm / pip / NuGet wrappers ship: not every release
+            // carries every platform, so macOS and linux-arm64 trail. There is
+            // no Windows-on-ARM or 32-bit build.
+            Builds:
+            [
+                new("linux-x64", "146.0.7680.177.5", "cloakbrowser-linux-x64.tar.gz", "chrome", SizeMb: 217),
+                new("linux-arm64", "146.0.7680.177.3", "cloakbrowser-linux-arm64.tar.gz", "chrome", SizeMb: 208),
+                new("osx-arm64", "145.0.7632.109.2", "cloakbrowser-darwin-arm64.tar.gz", "Chromium.app/Contents/MacOS/Chromium", SizeMb: 147),
+                new("osx-x64", "145.0.7632.109.2", "cloakbrowser-darwin-x64.tar.gz", "Chromium.app/Contents/MacOS/Chromium", SizeMb: 159),
+                new("win-x64", "146.0.7680.177.5", "cloakbrowser-windows-x64.zip", "chrome.exe", SizeMb: 562),
+            ],
+            // The override and cache the vendor's wrappers use, so a binary
+            // from `npm i -g cloakbrowser` / `pip install cloakbrowser` is
+            // reused instead of downloaded again.
+            BinaryPathEnvVar: "CLOAKBROWSER_BINARY_PATH",
+            VendorCache: new VendorCache(
+                DirEnvVar: "CLOAKBROWSER_CACHE_DIR",
+                DefaultDirName: ".cloakbrowser",
+                VersionDirPrefix: "chromium-"),
             LaunchArgs:
             [
                 "--no-first-run",
@@ -32,6 +52,11 @@ public static class KnownStealthBackends
                 "--disable-renderer-backgrounding",
                 "--disable-features=TranslateUI,Translate",
                 "--disable-dev-shm-usage",
+                // Keep Chromium off the macOS login keychain (the switch
+                // Playwright and Puppeteer pass). Without it the macOS build
+                // stalls at startup and never publishes its CDP endpoint.
+                // Ignored on other platforms.
+                "--use-mock-keychain",
             ]),
         // Future entries — Patchright, Camoufox, undetected-chromedriver —
         // land here as community PRs alongside their library satellites.
@@ -50,25 +75,72 @@ public static class KnownStealthBackends
 /// <param name="Name">Short canonical id (lowercase, no spaces) — what the
 /// user types after <c>webreaper stealth install</c>.</param>
 /// <param name="DisplayName">Human-friendly name shown in the picker UI.</param>
-/// <param name="RecommendedVersion">Pinned version the CLI installs by
-/// default. Override with <c>--version</c>.</param>
-/// <param name="SizeMb">Approximate download size for the prompt.</param>
 /// <param name="Description">One-line value-prop for the picker.</param>
 /// <param name="LicenseUrl">Binary-license URL shown in the Y/n prompt.</param>
 /// <param name="ReleaseUrlPattern">Format string with <c>{version}</c> and
-/// <c>{rid}</c> placeholders the CLI substitutes to build the download URL.</param>
-/// <param name="BinaryName">Executable name in the unpacked archive (no
-/// platform suffix; the CLI adds <c>.exe</c> on Windows).</param>
+/// <c>{file}</c> placeholders the CLI substitutes to build the URL of a
+/// release asset or of its <paramref name="ChecksumFile"/>.</param>
+/// <param name="ChecksumFile">The <c>sha256sum</c>-format manifest each
+/// release publishes; every download is verified against it.</param>
+/// <param name="Builds">The pinned upstream build per platform. A platform
+/// with no row has no upstream build.</param>
+/// <param name="BinaryPathEnvVar">Env var naming a binary to use as-is
+/// (skipping install), or <c>null</c> if the backend has none.</param>
+/// <param name="VendorCache">Where the vendor's own installer caches builds,
+/// or <c>null</c> if it has none.</param>
 /// <param name="LaunchArgs">Vendor-recommended command-line flags the CLI
 /// passes to the launched binary (in addition to
 /// <c>--remote-debugging-port=0</c> which is added automatically).</param>
 public sealed record StealthBackend(
     string Name,
     string DisplayName,
-    string RecommendedVersion,
-    int SizeMb,
     string Description,
     string LicenseUrl,
     string ReleaseUrlPattern,
-    string BinaryName,
-    IReadOnlyList<string> LaunchArgs);
+    string ChecksumFile,
+    IReadOnlyList<StealthBuild> Builds,
+    string? BinaryPathEnvVar,
+    VendorCache? VendorCache,
+    IReadOnlyList<string> LaunchArgs)
+{
+    /// <summary>The pinned build for <paramref name="platform"/> (a RID from
+    /// <see cref="StealthInstaller.CurrentPlatform"/>), or <c>null</c> when
+    /// upstream publishes none.</summary>
+    public StealthBuild? BuildFor(string? platform) =>
+        Builds.FirstOrDefault(b => string.Equals(b.Platform, platform, StringComparison.Ordinal));
+
+    /// <summary>The URL of <paramref name="file"/> (an asset or the
+    /// checksum manifest) in the release of <paramref name="version"/>.</summary>
+    public string ReleaseUrl(string version, string file) =>
+        ReleaseUrlPattern.Replace("{version}", version).Replace("{file}", file);
+}
+
+/// <summary>One platform's pinned upstream build of a
+/// <see cref="StealthBackend"/>.</summary>
+/// <param name="Platform">The RID the build runs on (<c>linux-x64</c>,
+/// <c>osx-arm64</c>, <c>win-x64</c>, …).</param>
+/// <param name="Version">The upstream build installed by default; override
+/// with <c>--version</c>.</param>
+/// <param name="Asset">The release asset's file name (<c>.tar.gz</c> or
+/// <c>.zip</c>).</param>
+/// <param name="Executable">The executable's <c>/</c>-separated path inside
+/// the unpacked archive.</param>
+/// <param name="SizeMb">Approximate download size for the prompt.</param>
+public sealed record StealthBuild(
+    string Platform,
+    string Version,
+    string Asset,
+    string Executable,
+    int SizeMb);
+
+/// <summary>Where a backend vendor's own installer caches its builds,
+/// laid out <c>&lt;dir&gt;/&lt;VersionDirPrefix&gt;&lt;version&gt;/&lt;Executable&gt;</c>.
+/// The CLI reuses a build it finds there instead of downloading it again.</summary>
+/// <param name="DirEnvVar">Env var that relocates the cache.</param>
+/// <param name="DefaultDirName">The cache directory's name under the user's
+/// home when <paramref name="DirEnvVar"/> is unset.</param>
+/// <param name="VersionDirPrefix">Prefix of each per-version directory.</param>
+public sealed record VendorCache(
+    string DirEnvVar,
+    string DefaultDirName,
+    string VersionDirPrefix);

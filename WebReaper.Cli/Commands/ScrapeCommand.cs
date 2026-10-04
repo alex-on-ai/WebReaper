@@ -179,13 +179,15 @@ internal static class ScrapeCommand
 
         // The stealth rung (top), when included. Appends above the browser rung
         // (for --browser, the climb target) or is the sole browser-class rung
-        // (for --stealth, the entry).
+        // (for --stealth, the entry). Each run draws a fresh fingerprint seed,
+        // so each run presents a new device, as the vendor's wrappers do.
         if (includeStealth && stealthPath is not null)
             builder = builder.WithCdpPageLoader(new CdpLaunchOptions
             {
                 ExecutablePath = stealthPath,
                 Headless = true,
-                AdditionalArgs = StealthBackend.LaunchArgs,
+                AdditionalArgs = StealthBackend.LaunchArgsFor(
+                    StealthInstaller.CurrentPlatform(), Environment.IsPrivilegedProcess),
             });
 
         if (ctx.Follow is not null) builder = builder.Follow(ctx.Follow);

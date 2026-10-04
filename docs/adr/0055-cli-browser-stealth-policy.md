@@ -350,3 +350,90 @@ Not done: verifying `SHA256SUMS.sig`, the Ed25519 signature the vendor
 wrappers check. .NET 10 has no standalone Ed25519 API and the CLI takes no
 crypto dependency, so the checksum guards against a corrupt download, not
 a compromised release origin.
+
+## Amendment (2026-09-26): the stealth rung's fingerprint profile and sandbox
+
+The #264 amendment passes the row's `LaunchArgs`, which are sanity flags
+only. The vendor's own wrappers add three flags to every launch by default
+(`getDefaultStealthArgs()` in CloakHQ/CloakBrowser's `js/src/config.ts`, and
+its twins in `cloakbrowser/config.py` and `dotnet/src/CloakBrowser/Config.cs`):
+`--no-sandbox`, `--fingerprint=<random 10000 to 99999>`, and
+`--fingerprint-platform=macos` on macOS, `windows` elsewhere. The cloud
+playground's `TierBScraper.BuildStealthArgs` passes all three. The CLI now
+passes the fingerprint pair and keeps Chromium's sandbox. The recipe is
+`StealthBackend.LaunchArgsFor(platform, seed, privileged)`, pure and unit
+tested: the row's `LaunchArgs`, its per-OS `LaunchArgsByOs`, its
+`FingerprintSeedArg` carrying the seed, and `--no-sandbox` for root on
+Linux. `ScrapeCommand` supplies the RID and `Environment.IsPrivilegedProcess`
+(on Unix, effective uid 0), and a fresh seed is drawn per run.
+
+- **A fresh random seed per run, not a stable one.** The binary already
+  seeds itself at random when given none (vendor changelog 0.3.4, "Auto-inject
+  random fingerprint seed at startup if none provided"). Measured on
+  osx-arm64: two seedless runs reported different GPUs, and three launches
+  with one seed reported identical values. Passing the seed keeps the
+  vendor's new-device-per-launch behaviour without depending on the
+  binary's default, which an older build reached through
+  `CLOAKBROWSER_BINARY_PATH` or the wrapper cache may predate. A stable
+  seed was rejected: every scrape starts from a fresh temp profile, so a
+  fixed seed would present one device with wiped storage on every run, link
+  all of a machine's runs together, and leave a flagged identity no way to
+  rotate. The vendor recommends a fixed seed for repeat visits to sites
+  that score them (reCAPTCHA v3), together with a persistent profile; the
+  CLI has neither knob yet.
+- **The persona per OS follows the wrappers: `macos` on macOS, `windows`
+  on Linux and Windows.** On osx-arm64 the flag changes one probed value,
+  the UA-CH `platformVersion`: the host's real 26.7.0 without it, the
+  persona's 15.2.0 with it (the seed alone leaves it at 26.7.0; the seed
+  picks the GPU). The `windows` persona on the same Mac reported
+  a Windows user agent and an NVIDIA D3D11 GPU beside an arm64 UA-CH
+  architecture and the Mac's fonts, the mismatch the wrappers avoid by
+  keeping Macs on `macos`. On Linux (linux-arm64 build in an Ubuntu 24.04
+  container) the flag turns "X11; Linux x86_64" with an OpenGL GPU into
+  "Windows NT 10.0" with a D3D11 GPU. The vendor warns that a Linux host
+  without Windows fonts contradicts that persona; the CLI does not check
+  fonts.
+- **The sandbox stays on, except for root on Linux.** `--no-sandbox` is not
+  a stealth flag: with one seed, the probe reported identical values with
+  and without it. What it does is switch off Chromium's renderer sandbox,
+  which Chromium's own documentation says must not be done when browsing
+  the open web, and a stealth build is pinned to an older Chromium (145 and
+  146 here) that lags upstream security fixes. The vendor's changelog ties
+  the flag to running as root, e.g. in Docker, and Playwright passes it by
+  default (`chromiumSandbox: false`). A scrape running as the user keeps
+  the sandbox. Only root on Linux gets `--no-sandbox`, because Chromium
+  exits at startup there without it ("Running as root without --no-sandbox
+  is not supported", crbug.com/638180). Measured in the container with the
+  linux-arm64 build: as root, the pre-change CLI's stealth rung never came
+  up (the launch timed out and the scrape exited 1) while the new one
+  scraped; as a normal user both ran sandboxed. macOS and Windows keep the
+  sandbox for every user (on Windows the privileged check means an elevated
+  admin, whom Chromium sandboxes normally).
+
+What changed on osx-arm64 (build 145.0.7632.109.2, `webreaper scrape
+<probe page> --stealth`, two runs before and two after): the launch gains
+`--fingerprint-platform=macos --fingerprint=<seed>` and never
+`--no-sandbox`; the probe's UA-CH `platformVersion` moves from the host's
+version to the persona's; its WebGL renderer changes from run to run both
+before and after. Its user agent, `navigator.platform`, hardware
+concurrency, device memory, screen, window, canvas, audio, client rects,
+fonts and WebGPU are unchanged. The Intoli checks on bot.sannysoft.com pass
+before and after, and CreepJS's headless and stealth detectors report the
+same flags.
+
+Known gap: Ubuntu 23.10 and later restrict unprivileged user namespaces
+through AppArmor, and the Linux archives ship no setuid sandbox helper, so
+a normal user there cannot start the build sandboxed. Chromium documents
+the fixes (lift `kernel.apparmor_restrict_unprivileged_userns`, add an
+AppArmor profile for the binary, or point `CHROME_DEVEL_SANDBOX` at Google
+Chrome's helper), and `--browser-cdp-url` accepts a browser the user
+launched with any flags. Not reproduced here: the container's kernel has
+no such restriction.
+
+Not done: the `--ignore-gpu-blocklist` the vendor's `build_args` adds on
+Windows (and in headed mode), which keeps WebGPU on the Basic Render
+Driver, because no Windows host was available to verify it; timezone and
+locale alignment, which the vendor derives from a proxy's exit IP and the
+CLI has no proxy for; and parity in the `WebReaper.Stealth.CloakBrowser`
+satellite, which still launches without the fingerprint pair. The vanilla
+browser rung has the same root-on-Linux refusal and is not changed here.

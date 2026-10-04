@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Schibsted_Grotesk, Fira_Code } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { siteConfig } from "@/lib/site";
@@ -9,15 +9,19 @@ import { SearchCommand } from "@/components/search/search-command";
 import { JsonLd } from "@/components/json-ld";
 import { getSearchIndex } from "@/lib/search";
 
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+// "The Reaping Line" runs on one grotesk in many weights plus a mono for
+// anything the reader might copy. Both are variable Google fonts, self-hosted
+// by next/font (no CDN request, no layout shift).
+const sans = Schibsted_Grotesk({
+  variable: "--font-schibsted",
   subsets: ["latin"],
+  display: "swap",
 });
-
-// Dark-first: default to dark unless the visitor explicitly chose light.
-// Uses flowbite's storage key so useThemeMode stays in sync (no FOUC).
-const themeScript = `try{var m=localStorage.getItem('flowbite-theme-mode');if(!m){m='dark';localStorage.setItem('flowbite-theme-mode','dark');}document.documentElement.classList.toggle('dark',m!=='light');}catch(e){document.documentElement.classList.add('dark');}`;
+const mono = Fira_Code({
+  variable: "--font-fira",
+  subsets: ["latin"],
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
@@ -57,14 +61,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html
-      lang="en"
-      suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable}`}
-    >
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
-      </head>
+    <html lang="en" className={`${sans.variable} ${mono.variable}`}>
       <body className="flex min-h-dvh flex-col bg-background font-sans text-foreground antialiased">
         <a
           href="#main"

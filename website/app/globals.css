@@ -3,45 +3,60 @@
 @source "../.flowbite-react/class-list.json";
 @plugin "@tailwindcss/typography";
 
-/* Class-based dark mode: flowbite's ThemeModeScript toggles `.dark` on <html>. */
+/* We ship a single light identity ("The Reaping Line"). `dark:` utilities are
+   gated to a `.dark` class that is never set, so a dark-OS visitor still gets
+   the intended light design instead of half-applied media-query dark styles. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ----------------------------------------------------------------------------
-   Design tokens, dark-first, supabase-inspired. Light values live in :root,
-   dark overrides in .dark. Mapped to Tailwind color utilities via @theme below.
+   Design tokens — "Reaping Line": warm-white canvas, ink linework, one violet
+   accent, secondary pipeline-role hues (blue transport / violet extraction /
+   teal sink) reserved for the configurator + diagrams. Light-only.
+   Token NAMES are unchanged from the previous system so every existing utility
+   (bg-surface, text-accent, border-border …) keeps working; only values moved.
 ---------------------------------------------------------------------------- */
 :root {
-  --background: #ffffff;
-  --background-subtle: #f7f8f8;
-  --surface: #ffffff;
-  --surface-2: #f1f3f3;
-  --border: #e6e8eb;
-  --border-strong: #d3d8dd;
-  --foreground: #0a0c0b;
-  --muted: #545d69;
-  --muted-2: #6d747e;
-  --accent: #047857;
-  --accent-strong: #036046;
-  --accent-foreground: #ffffff;
-  --accent-soft: rgba(4, 120, 87, 0.09);
-  --ring: #047857;
-}
+  /* The Reaping Line palette, verbatim from the concept (OKLCH). These names
+     are what the concept's own stylesheet (reaping.css + the shell rules below)
+     references, so that CSS is pasted essentially unchanged. */
+  --bg: oklch(97.1% 0.004 106);
+  --panel: #ffffff;
+  --ink: oklch(21% 0.012 270);
+  --ink-2: oklch(38% 0.012 270);
+  --wire: oklch(86% 0.006 106);
+  --line: oklch(30% 0.01 270);
+  --transport: oklch(52% 0.19 262);
+  --extract: oklch(50% 0.21 296);
+  --ai: oklch(62% 0.15 70);
+  --sink: oklch(56% 0.12 172);
+  --danger: oklch(55% 0.2 27);
+  --chip-bg: oklch(94.5% 0.006 106);
+  --shadow: 4px 4px 0 oklch(21% 0.012 270 / 0.12);
+  --r: 10px;
 
-.dark {
-  --background: #08090a;
-  --background-subtle: #0c0e0f;
-  --surface: #111315;
-  --surface-2: #16191b;
-  --border: #1e2325;
-  --border-strong: #2a3033;
-  --foreground: #ededed;
-  --muted: #9aa3ad;
-  --muted-2: #8b939c;
-  --accent: #34d399;
-  --accent-strong: #10b981;
-  --accent-foreground: #04130c;
-  --accent-soft: rgba(52, 211, 153, 0.12);
-  --ring: #34d399;
+  /* Token names the Tailwind @theme + the content pages already use, mapped
+     onto the concept palette so both systems share one source of truth. */
+  --background: var(--bg);
+  --background-subtle: var(--chip-bg);
+  --surface: var(--panel);
+  --surface-2: var(--chip-bg);
+  --border: var(--wire);         /* soft warm wire: 1px dividers, quiet pages */
+  --border-strong: var(--ink);   /* ink: hard 2px card borders */
+  --foreground: var(--ink);      /* ink text */
+  --muted: var(--ink-2);         /* secondary text */
+  --muted-2: oklch(46% 0.012 270); /* tertiary text */
+  --accent: var(--extract);      /* violet: the one brand accent */
+  --accent-strong: oklch(44% 0.2 296);
+  --accent-foreground: #ffffff;
+  --accent-soft: oklch(50% 0.21 296 / 0.1);
+  --ring: var(--transport);      /* the concept's focus ring is transport blue */
+
+  /* pipeline role palette (configurator, diagrams, station swatches) */
+  --role-transport: var(--transport);
+  --role-extract: var(--extract);
+  --role-sink: var(--sink);
+
+  --shadow-ink: oklch(21% 0.012 270 / 0.12);
 }
 
 @theme inline {
@@ -58,11 +73,14 @@
   --color-accent-strong: var(--accent-strong);
   --color-accent-foreground: var(--accent-foreground);
   --color-ring: var(--ring);
+  --color-role-transport: var(--role-transport);
+  --color-role-extract: var(--role-extract);
+  --color-role-sink: var(--role-sink);
 
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
+  --font-sans: var(--font-schibsted), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-fira), ui-monospace, "SF Mono", monospace;
 
-  --radius-card: 0.875rem;
+  --radius-card: 0.75rem;
 }
 
 /* ----------------------------------------------------------------------------
@@ -78,9 +96,17 @@
     -webkit-text-size-adjust: 100%;
   }
   body {
-    background-color: var(--background);
+    background-color: var(--bg);
+    /* the concept's signature: a warm canvas under a faint ink dot-grid */
+    background-image: radial-gradient(
+      oklch(21% 0.012 270 / 0.075) 1px,
+      transparent 1px
+    );
+    background-size: 22px 22px;
     color: var(--foreground);
     font-family: var(--font-sans);
+    font-size: 16.5px;
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
@@ -88,20 +114,19 @@
     background: var(--accent);
     color: var(--accent-foreground);
   }
-  /* Visible keyboard focus everywhere; mouse clicks stay clean via :focus-visible */
   :focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
     border-radius: 5px;
   }
   ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 12px;
+    height: 12px;
   }
   ::-webkit-scrollbar-thumb {
-    background: var(--border-strong);
+    background: #c9c6b6;
     border-radius: 9999px;
-    border: 2px solid var(--background);
+    border: 3px solid var(--background);
   }
   ::-webkit-scrollbar-track {
     background: transparent;
@@ -109,54 +134,44 @@
 }
 
 /* ----------------------------------------------------------------------------
-   Signature utilities (supabase-style glows, grids, gradient text)
+   Signature utilities — dot grid, hard offset-shadow cards, solid (non-gradient)
+   display text. The old supabase glows/gradients are neutralised in place so
+   existing markup keeps compiling while the look changes.
 ---------------------------------------------------------------------------- */
 @layer utilities {
+  /* headline classes on the hero used to clip a gradient; now solid, on brand. */
   .text-gradient {
-    background: linear-gradient(
-      180deg,
-      var(--foreground) 0%,
-      color-mix(in oklab, var(--foreground) 55%, var(--muted)) 100%
-    );
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    color: var(--foreground);
   }
   .text-accent-gradient {
-    background: linear-gradient(92deg, var(--accent) 0%, #22d3ee 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-  }
-  .bg-grid {
-    background-image: linear-gradient(
-        to right,
-        color-mix(in oklab, var(--border) 55%, transparent) 1px,
-        transparent 1px
-      ),
-      linear-gradient(
-        to bottom,
-        color-mix(in oklab, var(--border) 55%, transparent) 1px,
-        transparent 1px
-      );
-    background-size: 56px 56px;
+    color: var(--accent);
   }
   .bg-dot {
     background-image: radial-gradient(
-      color-mix(in oklab, var(--border-strong) 90%, transparent) 1px,
+      rgba(32, 29, 42, 0.09) 1px,
       transparent 1px
     );
     background-size: 22px 22px;
   }
+  /* kept for any legacy callers; a faint warm dot field rather than a hard grid */
+  .bg-grid {
+    background-image: radial-gradient(
+      rgba(32, 29, 42, 0.07) 1px,
+      transparent 1px
+    );
+    background-size: 22px 22px;
+  }
+  /* the old accent glow — reduced to a barely-there violet wash so heroes that
+     still reference it don't render an empty dark blob or a harsh halo. */
   .glow-accent {
     background: radial-gradient(
       60% 60% at 50% 0%,
-      var(--accent-soft) 0%,
+      rgba(124, 92, 255, 0.06) 0%,
       transparent 70%
     );
   }
   .mask-fade-b {
-    mask-image: linear-gradient(to bottom, black 55%, transparent 100%);
+    mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
   }
   .mask-fade-x {
     mask-image: linear-gradient(
@@ -167,20 +182,32 @@
       transparent
     );
   }
+  /* The signature: hard ink border + offset block shadow, like a part clicked
+     onto a bench. Interactive cards (a/button) press toward the pointer. */
   .surface-card {
+    background-color: var(--surface);
+    border: 2px solid var(--border-strong);
+    border-radius: var(--radius-card);
+    box-shadow: 4px 4px 0 var(--shadow-ink);
+    transition:
+      transform 0.15s ease,
+      box-shadow 0.15s ease,
+      border-color 0.15s ease;
+  }
+  a.surface-card:hover,
+  button.surface-card:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 var(--shadow-ink);
+  }
+  /* a quieter card for reading pages (docs, blog): 1px soft border, no shadow */
+  .quiet-card {
     background-color: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-card);
-    transition:
-      transform 0.2s ease,
-      border-color 0.2s ease,
-      box-shadow 0.2s ease;
+    transition: border-color 0.15s ease;
   }
-  /* Interactive cards (links/buttons) gently lift on hover */
-  a.surface-card:hover,
-  button.surface-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 14px 34px -18px rgba(0, 0, 0, 0.6);
+  a.quiet-card:hover {
+    border-color: var(--accent);
   }
   .animate-marquee {
     animation: marquee 32s linear infinite;
@@ -188,9 +215,8 @@
 }
 
 /* ----------------------------------------------------------------------------
-   Scroll-driven reveal (pure CSS, no JS, SSR-safe). Content is visible by
-   default; where the browser supports scroll timelines and motion is allowed,
-   `.reveal` blocks fade/slide in as they enter the viewport.
+   Scroll-driven reveal (pure CSS, SSR-safe). Visible by default; fades/slides
+   in where supported and motion is allowed.
 ---------------------------------------------------------------------------- */
 @supports (animation-timeline: view()) {
   @media (prefers-reduced-motion: no-preference) {
@@ -211,7 +237,6 @@
     transform: none;
   }
 }
-
 @keyframes marquee {
   from {
     transform: translateX(0);
@@ -222,16 +247,23 @@
 }
 
 /* ----------------------------------------------------------------------------
-   MDX / rehype-pretty-code (Shiki) code blocks + inline code
+   MDX / rehype-pretty-code (Shiki). Code stays on dark panels inside the light
+   page — a deliberate "terminal" contrast, matching the hero's install band.
 ---------------------------------------------------------------------------- */
+/* The bench signature carried onto MDX code: an ink panel that sits on the
+   page with a hard offset block shadow, matching the homepage CodeBlock and
+   the concept's configurator panes. The shadow rides the whole figure so a
+   titled block (title bar + pre) casts one shadow, not two. */
 [data-rehype-pretty-code-figure] {
   margin: 1.25rem 0;
+  border-radius: 0.7rem;
+  box-shadow: 4px 4px 0 var(--shadow-ink);
 }
 [data-rehype-pretty-code-figure] pre {
   overflow-x: auto;
-  border-radius: 0.75rem;
-  border: 1px solid var(--border);
-  background: #0a0e13;
+  border-radius: 0.7rem;
+  border: 1px solid #2b2735;
+  background: #16131f;
   padding: 1rem 1.1rem;
   font-size: 13px;
   line-height: 1.6;
@@ -242,15 +274,15 @@
   counter-reset: line;
 }
 [data-rehype-pretty-code-title] {
-  border: 1px solid var(--border);
+  border: 1px solid #2b2735;
   border-bottom: 0;
-  border-top-left-radius: 0.75rem;
-  border-top-right-radius: 0.75rem;
-  background: var(--surface-2);
+  border-top-left-radius: 0.7rem;
+  border-top-right-radius: 0.7rem;
+  background: #201c2b;
   padding: 0.55rem 1rem;
   font-family: var(--font-mono);
   font-size: 12px;
-  color: var(--muted);
+  color: #b7b1c6;
 }
 [data-rehype-pretty-code-title] + pre {
   border-top-left-radius: 0;
@@ -261,15 +293,35 @@
   width: 100%;
 }
 [data-highlighted-line] {
-  background: color-mix(in oklab, var(--accent) 12%, transparent);
+  background: rgba(124, 92, 255, 0.16);
   border-left: 2px solid var(--accent);
   margin-left: -1.1rem;
   padding-left: calc(1.1rem - 2px);
 }
 
+/* Long-form prose (docs, blog, use-cases, legal) tuned to the warm-ink palette
+   so reading pages match the identity without shouting. `dark:prose-invert` on
+   these pages is inert (no .dark class ships), so the light prose vars win. */
+.prose {
+  --tw-prose-body: #423d4d;
+  --tw-prose-headings: var(--foreground);
+  --tw-prose-lead: var(--muted);
+  --tw-prose-links: var(--accent);
+  --tw-prose-bold: var(--foreground);
+  --tw-prose-counters: var(--muted-2);
+  --tw-prose-bullets: var(--border-strong);
+  --tw-prose-hr: var(--border);
+  --tw-prose-quotes: var(--foreground);
+  --tw-prose-quote-borders: var(--accent);
+  --tw-prose-captions: var(--muted-2);
+  --tw-prose-code: var(--foreground);
+  --tw-prose-pre-bg: transparent;
+  --tw-prose-th-borders: var(--border);
+  --tw-prose-td-borders: var(--border);
+}
+
 /* Inline code inside prose (not the shiki blocks) */
-.prose
-  :where(code):not(:where([data-rehype-pretty-code-figure] *, pre *)) {
+.prose :where(code):not(:where([data-rehype-pretty-code-figure] *, pre *)) {
   border-radius: 0.375rem;
   border: 1px solid var(--border);
   background: var(--surface-2);
@@ -278,10 +330,8 @@
   font-weight: 500;
   color: var(--foreground);
 }
-.prose
-  :where(code):not(:where([data-rehype-pretty-code-figure] *))::before,
-.prose
-  :where(code):not(:where([data-rehype-pretty-code-figure] *))::after {
+.prose :where(code):not(:where([data-rehype-pretty-code-figure] *))::before,
+.prose :where(code):not(:where([data-rehype-pretty-code-figure] *))::after {
   content: none;
 }
 .prose :where(pre) {
@@ -309,13 +359,9 @@
 }
 
 /* ----------------------------------------------------------------------------
-   Authoritative inline-code styling. @tailwindcss/typography injects
-   `code::before/::after { content: "`" }` and default code styling that were
-   winning over the earlier reset (the `:where(code)` wrapper zeroed our element
-   specificity). This block is later in source order AND higher specificity
-   (`.prose :not(pre) > code` beats `.prose :where(code)`), with !important on
-   the pseudo-content reset, so it wins deterministically. Shiki blocks live in
-   <pre>, so `:not(pre) >` leaves them untouched.
+   Authoritative inline-code styling (wins over @tailwindcss/typography's
+   injected code::before/::after backticks). Shiki blocks live in <pre>, so
+   `:not(pre) >` leaves them untouched.
 ---------------------------------------------------------------------------- */
 .prose :not(pre) > code::before,
 .prose :not(pre) > code::after {
@@ -329,4 +375,166 @@
   font-size: 0.85em;
   font-weight: 500;
   color: var(--foreground);
+}
+
+/* ----------------------------------------------------------------------------
+   Shell — the concept's sticky ink-bordered header and one-row footer, shared
+   across every route. Class-based (rl-*) so they never collide with Tailwind.
+---------------------------------------------------------------------------- */
+.rl-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: oklch(97.1% 0.004 106 / 0.88);
+  backdrop-filter: blur(6px);
+  border-bottom: 2px solid var(--ink);
+}
+.rl-shell {
+  max-width: 1140px;
+  margin: 0 auto;
+  padding: 0 clamp(16px, 3.4vw, 40px);
+}
+.rl-header-inner {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  height: 60px;
+}
+.rl-wordmark {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 800;
+  font-size: 1.12rem;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  color: var(--ink);
+}
+.rl-wordmark img {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: block;
+}
+.rl-nav {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 1.15rem;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+.rl-link {
+  text-decoration: none;
+  color: var(--ink);
+  border-bottom: 2px solid transparent;
+  padding: 0.2rem 0;
+  transition: border-color 0.12s ease;
+}
+.rl-link:hover,
+.rl-link[data-active="true"] {
+  border-bottom-color: var(--ink);
+}
+.rl-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--ink-2);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.86rem;
+}
+.rl-iconbtn:hover {
+  color: var(--ink);
+}
+.rl-iconbtn kbd {
+  border: 1px solid var(--wire);
+  border-radius: 4px;
+  padding: 0 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+}
+.rl-gh {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  padding: 0.28rem 0.8rem;
+  text-decoration: none;
+  color: var(--ink);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  font-size: 0.88rem;
+  font-weight: 700;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.rl-gh:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0 oklch(21% 0.012 270 / 0.12);
+}
+.rl-menu-btn {
+  display: none;
+  margin-left: auto;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 2px solid var(--ink);
+  border-radius: 9px;
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+}
+.rl-mobile {
+  border-bottom: 2px solid var(--ink);
+  background: oklch(97.1% 0.004 106 / 0.97);
+  backdrop-filter: blur(6px);
+}
+.rl-mobile a {
+  display: block;
+  padding: 0.75rem clamp(16px, 3.4vw, 40px);
+  text-decoration: none;
+  color: var(--ink);
+  font-weight: 600;
+  border-top: 1px solid var(--wire);
+}
+.rl-mobile a:first-child {
+  border-top: 0;
+}
+.rl-footer {
+  margin-top: clamp(3rem, 7vw, 5rem);
+  border-top: 2px solid var(--ink);
+  padding: 1.4rem 0 2.2rem;
+  font-size: 0.88rem;
+  color: var(--ink-2);
+}
+.rl-footer-inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem 1.6rem;
+  align-items: center;
+}
+.rl-footer a {
+  font-weight: 600;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+.rl-footer a:hover {
+  color: var(--ink);
+}
+.rl-footer .rl-right {
+  margin-left: auto;
+}
+@media (max-width: 820px) {
+  .rl-nav {
+    display: none;
+  }
+  .rl-menu-btn {
+    display: inline-flex;
+  }
 }

@@ -17,7 +17,7 @@ export default function DocsIndex() {
       <div className="flex items-center gap-2 text-sm font-medium text-accent">
         <BookOpen className="h-4 w-4" /> Documentation
       </div>
-      <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+      <h1 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">
         Everything you need to ship a scraper
       </h1>
       <p className="mt-3 max-w-2xl text-lg text-muted">
@@ -27,7 +27,7 @@ export default function DocsIndex() {
 
       <Link
         href="/docs/getting-started"
-        className="mt-6 inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-medium text-accent-foreground transition hover:bg-accent-strong"
+        className="mt-6 inline-flex items-center gap-2 rounded-lg border-2 border-border-strong bg-accent px-5 py-2.5 text-sm font-semibold text-accent-foreground shadow-[3px_3px_0_var(--shadow-ink)] transition-all duration-150 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-accent-strong hover:shadow-[5px_5px_0_var(--shadow-ink)]"
       >
         Get started <ArrowRight className="h-4 w-4" />
       </Link>

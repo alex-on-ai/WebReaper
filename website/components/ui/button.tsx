@@ -2,12 +2,15 @@ import Link from "next/link";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
+// The bench aesthetic: a hard ink border + offset block shadow that presses
+// toward the pointer on hover. Primary carries the violet fill.
 const variants = {
   primary:
-    "bg-accent text-accent-foreground hover:bg-accent-strong shadow-[0_8px_24px_-10px] shadow-accent/50 ring-1 ring-inset ring-white/10",
+    "border-2 border-border-strong bg-accent text-accent-foreground shadow-[3px_3px_0_var(--shadow-ink)] hover:bg-accent-strong hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[5px_5px_0_var(--shadow-ink)] active:translate-x-0 active:translate-y-0 active:shadow-[2px_2px_0_var(--shadow-ink)]",
   secondary:
-    "border border-border-strong bg-surface text-foreground hover:border-accent/50 hover:bg-surface-2",
-  outline: "border border-border text-foreground hover:border-accent/60 hover:bg-surface-2",
+    "border-2 border-border-strong bg-surface text-foreground shadow-[3px_3px_0_var(--shadow-ink)] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[5px_5px_0_var(--shadow-ink)] active:translate-x-0 active:translate-y-0 active:shadow-[2px_2px_0_var(--shadow-ink)]",
+  outline:
+    "border-2 border-border-strong text-foreground hover:bg-surface-2",
   ghost: "text-muted hover:text-foreground hover:bg-surface-2",
 } as const;
 
@@ -18,7 +21,7 @@ const sizes = {
 } as const;
 
 const base =
-  "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 disabled:pointer-events-none disabled:opacity-50";
 
 type CommonProps = {
   variant?: keyof typeof variants;

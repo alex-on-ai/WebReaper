@@ -1,0 +1,641 @@
+/* ============================================================================
+   The Reaping Line — homepage stylesheet, ported verbatim from the concept
+   (concepts/06-pipeline). Every rule is scoped under `.rl` so none of it leaks
+   into the docs/blog/marketing pages, which stay on Tailwind. The palette
+   variables (--ink, --transport, --extract, --sink, --wire, --panel, --chip-bg,
+   --shadow, --r, --ai, --danger) are defined globally in globals.css.
+   ========================================================================== */
+
+.rl {
+  color: var(--ink);
+}
+.rl .wrap {
+  max-width: 1140px;
+  margin: 0 auto;
+  padding: 0 clamp(16px, 3.4vw, 40px);
+}
+.rl code,
+.rl pre,
+.rl .mono {
+  font-family: var(--font-mono);
+}
+
+/* hero -------------------------------------------------------------------- */
+.rl .hero {
+  padding: clamp(2.6rem, 6vw, 4.6rem) 0 1.2rem;
+}
+.rl .hero h1 {
+  font-size: clamp(2.3rem, 5.4vw, 4.4rem);
+  line-height: 1.02;
+  letter-spacing: -0.025em;
+  font-weight: 800;
+  text-wrap: balance;
+  max-width: 16ch;
+}
+.rl .hero h1 em {
+  font-style: normal;
+  color: var(--extract);
+}
+.rl .hero p.lede {
+  margin-top: 1.1rem;
+  max-width: 56ch;
+  font-size: clamp(1.02rem, 1.4vw, 1.18rem);
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+.rl .hero .facts {
+  margin-top: 1.15rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.6rem;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+.rl .hero .facts span {
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  padding: 0.18rem 0.68rem;
+  background: var(--panel);
+}
+
+/* ============ RIG (configurator) ======================================== */
+.rl .rig {
+  margin: 2.2rem 0 0;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.rl .rig-head {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.7rem 1.1rem;
+  border-bottom: 2px solid var(--ink);
+  background: var(--chip-bg);
+}
+.rl .rig-head .dots {
+  display: flex;
+  gap: 0.32rem;
+}
+.rl .rig-head .dots i {
+  width: 0.62rem;
+  height: 0.62rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink);
+  background: var(--panel);
+}
+.rl .rig-head strong {
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+}
+.rl .rig-head .hint {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--ink-2);
+  font-weight: 500;
+}
+.rl .stations {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  border-bottom: 2px solid var(--ink);
+  margin: 0;
+  padding: 0;
+  border-top: 0;
+  border-left: 0;
+  border-right: 0;
+  min-inline-size: 0;
+}
+.rl .station {
+  padding: 1rem 1.05rem 1.15rem;
+  border-right: 2px dashed var(--wire);
+  position: relative;
+}
+.rl .station:last-child {
+  border-right: 0;
+}
+.rl .station > label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+  margin-bottom: 0.65rem;
+}
+.rl .station .swatch {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 3px;
+  border: 1.5px solid var(--ink);
+  flex: none;
+}
+.rl .opts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.rl .opt {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  border: 1.5px solid var(--wire);
+  border-radius: 8px;
+  padding: 0.42rem 0.6rem;
+  cursor: pointer;
+  background: var(--panel);
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition:
+    border-color 0.12s,
+    background 0.12s;
+}
+.rl .opt:hover {
+  border-color: var(--ink);
+}
+.rl .opt input {
+  accent-color: var(--ink);
+  width: 0.95rem;
+  height: 0.95rem;
+  flex: none;
+}
+.rl .opt small {
+  display: block;
+  font-weight: 500;
+  color: var(--ink-2);
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+.rl .opt.on {
+  border-color: var(--ink);
+  background: var(--chip-bg);
+  box-shadow: 2px 2px 0 oklch(21% 0.012 270 / 0.14);
+}
+.rl .opt .llm {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ai);
+  border: 1px solid var(--ai);
+  border-radius: 4px;
+  padding: 0 0.3rem;
+  margin-left: auto;
+  flex: none;
+}
+
+/* belt -------------------------------------------------------------------- */
+.rl .belt {
+  position: relative;
+  height: 120px;
+  border-bottom: 2px solid var(--ink);
+  background: linear-gradient(oklch(21% 0.012 270 / 0.05) 1px, transparent 1px) 0
+    0 / 100% 24px;
+}
+.rl .belt svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.rl .belt .node-label {
+  font: 600 11px var(--font-mono);
+  fill: var(--ink-2);
+  letter-spacing: 0.04em;
+}
+.rl .puck {
+  offset-path: path("M -30 60 L 1200 60");
+  offset-distance: 0%;
+  position: absolute;
+  width: 26px;
+  height: 32px;
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 2px 2px 0 oklch(21% 0.012 270 / 0.14);
+}
+.rl .puck::before {
+  content: "";
+  position: absolute;
+  inset: 5px 4px auto;
+  height: 3px;
+  background: var(--ink);
+  opacity: 0.7;
+}
+.rl .puck::after {
+  content: "";
+  position: absolute;
+  inset: 11px 4px auto;
+  height: 2px;
+  background: var(--ink);
+  opacity: 0.35;
+  box-shadow:
+    0 5px 0 oklch(21% 0.012 270 / 0.35),
+    0 10px 0 oklch(21% 0.012 270 / 0.35);
+}
+.rl .puck.md {
+  border-color: var(--extract);
+}
+.rl .puck.md::before {
+  background: var(--extract);
+}
+@keyframes rl-ride {
+  from {
+    offset-distance: 0%;
+  }
+  to {
+    offset-distance: 100%;
+  }
+}
+.rl .belt .puck {
+  animation: rl-ride var(--dur, 5.2s) linear infinite;
+  animation-delay: var(--delay, 0s);
+}
+@media (prefers-reduced-motion: reduce) {
+  .rl .belt .puck {
+    animation: none;
+    offset-distance: var(--rest, 30%);
+  }
+}
+
+/* panes ------------------------------------------------------------------- */
+.rl .panes {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  min-height: 300px;
+}
+.rl .pane {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.rl .pane + .pane {
+  border-left: 2px solid var(--ink);
+}
+.rl .pane-head {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.55rem 0.95rem;
+  border-bottom: 1.5px solid var(--wire);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+.rl .pane-head .tag {
+  color: var(--ink-2);
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.rl .copy {
+  margin-left: auto;
+  border: 1.5px solid var(--ink);
+  background: var(--panel);
+  border-radius: 6px;
+  font: 600 0.74rem var(--font-sans);
+  padding: 0.22rem 0.6rem;
+  cursor: pointer;
+  color: var(--ink);
+}
+.rl .copy:hover {
+  background: var(--chip-bg);
+}
+.rl .copy.ok {
+  background: var(--sink);
+  color: #fff;
+  border-color: var(--sink);
+}
+.rl .pane pre {
+  flex: 1;
+  padding: 1rem 1.1rem 1.2rem;
+  overflow-x: auto;
+  font-size: 0.84rem;
+  line-height: 1.62;
+  tab-size: 2;
+  white-space: pre;
+}
+.rl .pane pre .flash {
+  animation: rl-flash 1s ease-out;
+}
+@keyframes rl-flash {
+  0% {
+    background: oklch(90% 0.12 296 / 0.9);
+  }
+  100% {
+    background: transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rl .pane pre .flash {
+    animation: none;
+  }
+}
+/* code tokens */
+.rl .t-cmd {
+  color: var(--ink);
+  font-weight: 600;
+}
+.rl .t-flag {
+  color: var(--transport);
+  font-weight: 500;
+}
+.rl .t-str {
+  color: var(--sink);
+}
+.rl .t-com {
+  color: oklch(55% 0.01 270);
+}
+.rl .t-kw {
+  color: var(--extract);
+}
+.rl .t-ty {
+  color: var(--transport);
+}
+.rl .t-me {
+  color: var(--ink);
+  font-weight: 600;
+}
+.rl .t-warn {
+  color: var(--ai);
+}
+.rl .note {
+  border-top: 1.5px solid var(--wire);
+  padding: 0.6rem 0.95rem;
+  font-size: 0.8rem;
+  color: var(--ink-2);
+}
+.rl .note strong {
+  color: var(--ink);
+}
+.rl .note code {
+  font-size: 0.92em;
+}
+
+/* sections ---------------------------------------------------------------- */
+.rl section {
+  padding: clamp(3rem, 7vw, 5rem) 0 0;
+}
+.rl h2 {
+  font-size: clamp(1.7rem, 3vw, 2.5rem);
+  letter-spacing: -0.02em;
+  font-weight: 800;
+  line-height: 1.08;
+  text-wrap: balance;
+}
+.rl .sub {
+  margin-top: 0.6rem;
+  color: var(--ink-2);
+  max-width: 58ch;
+  text-wrap: pretty;
+}
+
+/* seams ------------------------------------------------------------------- */
+.rl .seams {
+  margin-top: 1.8rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(245px, 1fr));
+  gap: 1rem;
+}
+.rl .seam {
+  border: 2px solid var(--ink);
+  border-radius: var(--r);
+  background: var(--panel);
+  padding: 1.05rem 1.1rem;
+  box-shadow: var(--shadow);
+}
+.rl .seam h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 1rem;
+}
+.rl .seam h3 .swatch {
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 3px;
+  border: 1.5px solid var(--ink);
+}
+.rl .seam code.iface {
+  display: inline-block;
+  margin: 0.5rem 0 0.35rem;
+  font-size: 0.82rem;
+  background: var(--chip-bg);
+  border: 1.5px solid var(--wire);
+  border-radius: 6px;
+  padding: 0.15rem 0.5rem;
+}
+.rl .seam p {
+  font-size: 0.9rem;
+  color: var(--ink-2);
+}
+.rl .seam ul {
+  list-style: none;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.rl .seam li {
+  font: 500 0.74rem var(--font-mono);
+  border: 1.5px solid var(--wire);
+  border-radius: 999px;
+  padding: 0.12rem 0.5rem;
+  background: var(--panel);
+}
+
+/* climb ------------------------------------------------------------------- */
+.rl .climb {
+  margin-top: 1.8rem;
+  border: 2px solid var(--ink);
+  border-radius: var(--r);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  padding: 1.3rem 1.2rem;
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 1.6rem;
+  align-items: center;
+}
+.rl .ladder {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.rl .rung {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1.5px solid var(--wire);
+  border-radius: 8px;
+  padding: 0.55rem 0.8rem;
+}
+.rl .rung b {
+  font-size: 0.92rem;
+}
+.rl .rung small {
+  color: var(--ink-2);
+}
+.rl .rung .st {
+  margin-left: auto;
+  font: 600 0.72rem var(--font-mono);
+  border-radius: 5px;
+  padding: 0.1rem 0.45rem;
+  border: 1.5px solid currentColor;
+}
+.rl .rung.r1 .st,
+.rl .rung.r2 .st {
+  color: var(--danger);
+}
+.rl .rung.r3 .st {
+  color: var(--sink);
+}
+.rl .climb ul.rules {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.92rem;
+}
+.rl .climb ul.rules li {
+  padding-left: 1.2rem;
+  position: relative;
+}
+.rl .climb ul.rules li::before {
+  content: "\2192";
+  position: absolute;
+  left: 0;
+  color: var(--transport);
+  font-weight: 700;
+}
+.rl .climb ul.rules strong,
+.rl .climb ul.rules em {
+  color: var(--ink);
+  font-style: normal;
+}
+
+/* agents ------------------------------------------------------------------ */
+.rl .agents {
+  margin-top: 1.8rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+.rl .agent {
+  border: 2px solid var(--ink);
+  border-radius: var(--r);
+  background: var(--panel);
+  padding: 1.05rem 1.1rem;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.rl .agent h3 {
+  font-size: 1rem;
+}
+.rl .agent p {
+  font-size: 0.9rem;
+  color: var(--ink-2);
+}
+.rl .agent pre {
+  background: var(--ink);
+  color: oklch(95% 0.01 106);
+  border-radius: 8px;
+  padding: 0.7rem 0.8rem;
+  font-size: 0.76rem;
+  overflow-x: auto;
+  margin-top: auto;
+}
+
+/* install ----------------------------------------------------------------- */
+.rl .install {
+  margin: clamp(3rem, 7vw, 5rem) 0 0;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: var(--ink);
+  color: oklch(96% 0.005 106);
+  padding: clamp(1.4rem, 3.4vw, 2.4rem);
+  box-shadow: var(--shadow);
+}
+.rl .install h2 {
+  color: #fff;
+}
+.rl .install .rows {
+  margin-top: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.rl .irow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  border: 1.5px solid oklch(45% 0.01 270);
+  border-radius: 9px;
+  padding: 0.6rem 0.9rem;
+}
+.rl .irow b {
+  flex: 0 0 7.5rem;
+  font-size: 0.85rem;
+  color: oklch(75% 0.02 106);
+  font-weight: 500;
+}
+.rl .irow code {
+  font-size: 0.82rem;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none;
+  min-width: 0;
+  flex: 1;
+}
+.rl .irow .copy {
+  border-color: oklch(70% 0.01 270);
+  background: transparent;
+  color: #fff;
+}
+.rl .irow .copy:hover {
+  background: oklch(100% 0 0 / 0.08);
+}
+.rl .install p.fine {
+  margin-top: 0.9rem;
+  font-size: 0.82rem;
+  color: oklch(72% 0.02 106);
+}
+.rl .install p.fine a {
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* responsive -------------------------------------------------------------- */
+@media (max-width: 980px) {
+  .rl .stations {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .rl .station:nth-child(2) {
+    border-right: 0;
+  }
+  .rl .station:nth-child(-n + 2) {
+    border-bottom: 2px dashed var(--wire);
+  }
+  .rl .panes {
+    grid-template-columns: 1fr;
+  }
+  .rl .pane + .pane {
+    border-left: 0;
+    border-top: 2px solid var(--ink);
+  }
+  .rl .climb {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 640px) {
+  .rl .belt {
+    height: 90px;
+  }
+}

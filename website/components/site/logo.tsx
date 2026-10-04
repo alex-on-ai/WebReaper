@@ -1,7 +1,8 @@
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 
-/** Official WebReaper mark (the logo.png shipped on every NuGet package + README). */
+/** The WebReaper reaper, recoloured to the palette (violet cloak, white face +
+ *  blade, ink outline) from the official logo.png shipped on every package. */
 export function Logo({
   className,
   showWordmark = true,
@@ -12,15 +13,15 @@ export function Logo({
   return (
     <span className={cn("inline-flex items-center gap-2.5", className)}>
       <Image
-        src="/webreaper-logo.png"
+        src="/webreaper-mark.png"
         alt="WebReaper"
         width={32}
         height={32}
-        className="h-8 w-8 rounded-lg"
+        className="h-8 w-8"
         priority
       />
       {showWordmark ? (
-        <span className="text-[15px] font-semibold tracking-tight text-foreground">
+        <span className="text-[17px] font-extrabold tracking-tight text-foreground">
           WebReaper
         </span>
       ) : null}

@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Design guide: The Reaping Line</title>
+<meta name="description" content="Creative direction and build notes for the WebReaper 'Reaping Line' concept site.">
+<link rel="icon" type="image/png" href="../webreaper-logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:ital,wght@0,400..900;1,400..900&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:oklch(97.1% .004 106);--panel:#fff;--ink:oklch(21% .012 270);--ink-2:oklch(38% .012 270);
+  --wire:oklch(86% .006 106);--transport:oklch(52% .19 262);--extract:oklch(50% .21 296);
+  --sink:oklch(56% .12 172);--chip:oklch(94.5% .006 106);--shadow:4px 4px 0 oklch(21% .012 270/.12);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);background-image:radial-gradient(oklch(21% .012 270/.075) 1px,transparent 1px);background-size:22px 22px;color:var(--ink);font-family:"Schibsted Grotesk",system-ui,sans-serif;font-size:16.5px;line-height:1.55}
+main{max-width:74ch;margin:0 auto;padding:2.4rem clamp(16px,4vw,32px) 4rem}
+header.g{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap;border-bottom:2px solid var(--ink);padding-bottom:1rem;margin-bottom:1.6rem}
+h1{font-size:clamp(1.6rem,4vw,2.2rem);letter-spacing:-.02em;font-weight:800}
+h1 span{color:var(--extract)}
+a{color:inherit;font-weight:600}
+:focus-visible{outline:3px solid var(--transport);outline-offset:2px}
+h2{font-size:1.12rem;font-weight:800;margin:2.1rem 0 .5rem;letter-spacing:-.01em}
+h2::before{content:"";display:inline-block;width:.7rem;height:.7rem;border-radius:3px;border:1.5px solid var(--ink);margin-right:.55rem;background:var(--chip);vertical-align:baseline}
+h2.c1::before{background:var(--transport)}h2.c2::before{background:var(--extract)}h2.c3::before{background:var(--sink)}
+p,li{color:var(--ink-2)}
+p+p{margin-top:.6rem}
+strong{color:var(--ink)}
+ul{padding-left:1.2rem;display:flex;flex-direction:column;gap:.4rem;margin:.4rem 0}
+code{font-family:"Fira Code",ui-monospace,monospace;font-size:.85em;background:var(--chip);border:1px solid var(--wire);border-radius:5px;padding:.05em .35em}
+pre{font-family:"Fira Code",ui-monospace,monospace;font-size:.8rem;line-height:1.6;background:var(--panel);border:2px solid var(--ink);border-radius:10px;box-shadow:var(--shadow);padding:.9rem 1rem;overflow-x:auto;margin:.7rem 0 1rem;color:var(--ink)}
+footer.g{border-top:2px solid var(--ink);margin-top:2.6rem;padding-top:1rem;display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;font-size:.9rem;color:var(--ink-2)}
+.passlog{list-style:none;padding:0}
+.passlog li{border:2px solid var(--ink);border-radius:10px;background:var(--panel);box-shadow:var(--shadow);padding:.8rem .95rem;margin-top:.6rem}
+.passlog b{display:block;margin-bottom:.15rem;color:var(--ink)}
+</style>
+</head>
+<body>
+<main>
+<header class="g">
+  <h1>Design guide: <span>The Reaping Line</span></h1>
+  <nav><a href="../">← back to the site</a></nav>
+</header>
+
+<p>This page documents how the concept was made: direction, implementation,
+tooling, the three iteration passes, and how to reproduce the workflow.</p>
+
+<h2>Creative direction</h2>
+<p>WebReaper's library is a fluent builder: <code>.Crawl(url).AsMarkdown().WriteToConsole()</code>
+reads like parts clicking onto a chassis. The site takes that literally: a
+bright workshop bench where you assemble a <strong>reaping line</strong> from four
+stations (scope, transport, extraction, destination) and watch the CLI command
+and the C# write themselves. The aesthetic lane is "technical toy": warm-white
+canvas with a dot grid, hard 2&nbsp;px ink borders, offset block shadows, one role
+color per station (blue transport, violet extraction, teal destination). The
+configurator is the hero; everything below it annotates what you just built:
+the seams behind each station, the escalation ladder, the agent surfaces.</p>
+
+<h2 class="c1">What's real</h2>
+<ul>
+<li>Every option maps to a real flag or builder call, cross-checked against the
+release binary's <code>webreaper help</code> (v11.3.x) and the repository README,
+not against memory.</li>
+<li>The configurator encodes real constraints: <code>--schema</code> /
+<code>--prompt</code> / <code>--infer</code> are mutually exclusive; LLM modes read the key
+from <code>WEBREAPER_LLM_API_KEY</code>, never a flag; MongoDB is a library sink, so
+the CLI pane honestly falls back to a stdout pipe and says why.</li>
+<li>The subtlest accuracy catch: <strong>crawl has no start-tier flag.</strong> The
+real CLI only accepts <code>--browser</code> / <code>--stealth</code> on
+<code>scrape</code>; a whole-site crawl always starts each page at HTTP and
+auto-climbs on a block (ADR-0083), host-sticky. The first draft emitted
+<code>crawl --stealth</code>; verification against the binary's help text caught it,
+and the fix became a teaching moment in the UI note.</li>
+</ul>
+
+<h2 class="c2">Implementation</h2>
+<ul>
+<li>One static HTML file, no framework, no build. The configurator is ~120 lines
+of vanilla JS: a state object, a <code>cliText()</code> / <code>csLines()</code> pair that
+regenerate both panes, and a token-level highlighter.</li>
+<li>The conveyor belt is an inline SVG line with role-colored station nodes;
+the "pucks" are CSS <code>offset-path</code> page icons riding it on an infinite
+linear animation. <code>prefers-reduced-motion</code> parks them at rest positions.</li>
+<li>Typography: Schibsted Grotesk (voice: precise, friendly, a little Nordic
+workshop) + Fira Code for everything the user might copy.</li>
+<li>Palette is OKLCH throughout; the four role colors are the only saturation
+on the page, so the configurator reads as the subject.</li>
+</ul>
+
+<h2 class="c3">Accessibility &amp; performance</h2>
+<ul>
+<li>Stations are native radio groups inside <code>&lt;fieldset&gt;</code>s: arrow-key
+navigation and screen-reader semantics for free; the CLI pane is
+<code>aria-live</code> so changes are announced.</li>
+<li>Copy buttons are real buttons with visible text; focus outlines are 3&nbsp;px
+solid; body text sits at ≥7:1 contrast, secondary at ≥4.5:1.</li>
+<li>Two font families, one inline SVG, zero images, zero libraries. The page is
+a single request plus fonts.</li>
+</ul>
+
+<h2>Iteration log</h2>
+<ul class="passlog">
+<li><b>Pass 1: structure &amp; first screenshot review.</b> Fixed the CLI
+highlighter wrapping its own inserted <code>class="…"</code> attributes (regex ran
+over the HTML it had just produced: rewritten as a token-level pass with a
+quote-state machine); the fourth seam card orphaned on its own row (grid
+<code>minmax</code> 270→245&nbsp;px); belt station nodes were all-gray (now role-colored
+with a soft halo).</li>
+<li><b>Pass 2: behavior verification.</b> Drove all four stations
+programmatically through an 8-combination matrix in the browser and asserted
+the generated CLI string and C# markers for each. Caught and fixed the
+<code>crawl --stealth</code> inaccuracy (see "What's real"); added
+<code>--max-pages 500</code> to site-scope commands to mirror the C# pane's
+<code>PageCrawlLimit(500)</code>.</li>
+<li><b>Pass 3: responsive &amp; polish.</b> 375&nbsp;px pass: stations collapse to a
+2×2 then 1-column grid, panes stack, code pres scroll internally with no page
+overflow; verified copy buttons, focus order, and the reduced-motion belt;
+tightened the ladder chips ("403 challenge / still blocked / 200 OK") so the
+escalation reads at a glance.</li>
+</ul>
+
+<h2>Reproduce this workflow</h2>
+<pre>1. ground truth first: run the real binary (`webreaper help`, real
+   scrapes) and save transcripts; write FACTS.md every claim links to
+2. design the interaction before the skin: the config matrix is the
+   product story (what's a flag, what's library-only, what's automatic)
+3. build static: one file, vanilla JS, OKLCH tokens, two fonts
+4. iterate with full-page screenshots at 1440px and 375px; fix, repeat ×3
+5. verify behavior programmatically (drive the radios, assert the output)
+6. deploy the directory: `vercel deploy --prod`</pre>
+<p>Built with Claude (Fable&nbsp;5). No image-generation tools were needed for
+this concept: the visual system is pure CSS/SVG.</p>
+
+<footer class="g">
+  <span><strong>WebReaper</strong>: concept "The Reaping Line"</span>
+  <span><a href="https://github.com/alex-on-ai/WebReaper">GitHub</a> · <a href="https://www.nuget.org/packages/WebReaper">NuGet</a></span>
+</footer>
+</main>
+</body>
+</html>
